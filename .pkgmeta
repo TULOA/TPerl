@@ -1,1 +1,20 @@
 package-as: TPerl
+
+
+move-folders:
+    TPerl/TPerl: TPerl
+    TPerl/TPerl_ArcaneBar: TPerl_ArcaneBar
+    TPerl/TPerl_CustomHighlight: TPerl_CustomHighlight
+    TPerl/TPerl_Options: TPerl_Options
+    TPerl/TPerl_Party: TPerl_Party
+    TPerl/TPerl_PartyPet: TPerl_PartyPet
+    TPerl/TPerl_Player: TPerl_Player
+    TPerl/TPerl_PlayerBuffs: TPerl_PlayerBuffs
+    TPerl/TPerl_PlayerPet: TPerl_PlayerPet
+    TPerl/TPerl_RaidAdmin: TPerl_RaidAdmin
+    TPerl/TPerl_RaidFrames: TPerl_RaidFrames
+    TPerl/TPerl_RaidHelper: TPerl_RaidHelper
+    TPerl/TPerl_RaidMonitor: TPerl_RaidMonitor
+    TPerl/TPerl_RaidPets: TPerl_RaidPets
+    TPerl/TPerl_Target: TPerl_Target
+    TPerl/TPerl_TargetTarget: TPerl_TargetTarget

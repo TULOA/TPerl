@@ -1,5 +1,5 @@
 -- X-Perl UnitFrames
--- Author: Resike
+-- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 --Russian localization file translated by StingerSoft
 if (GetLocale() == "ruRU") then

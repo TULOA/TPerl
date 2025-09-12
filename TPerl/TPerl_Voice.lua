@@ -1,5 +1,5 @@
 -- X-Perl UnitFrames
--- Author: Resike
+-- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
 CreateFrame("Frame", "TPerl_Voice", BackdropTemplateMixin and "BackdropTemplate")

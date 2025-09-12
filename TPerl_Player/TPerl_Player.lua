@@ -1,5 +1,5 @@
 -- X-Perl UnitFrames
--- Author: Resike
+-- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
 local TPerl_Player_Events = { }
@@ -3383,6 +3383,7 @@ function TPerl_BuildMonkHarmonyBar_Mists(frame)
 				elseif pconf.showRunes then
 								frame:Show()
 				end
+				
 				
 				frame:SetMovable(true)
 				frame:RegisterForDrag("LeftButton")

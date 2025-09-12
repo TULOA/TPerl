@@ -1,5 +1,5 @@
 -- TPerl UnitFrames
--- Author: Resike
+-- Author: TULOA
 -- License: GNU GPL v3, 18 October 2014
 
 TPerl_SetModuleRevision("$Revision:  $")
