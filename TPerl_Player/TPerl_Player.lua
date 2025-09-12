@@ -2294,11 +2294,6 @@ end
 
 
 
-
-
-
-
-
 -- TPerl_Player_InitDruid | Complete | Has Watcher
 function TPerl_Player_InitDruid(self, playerClass)
     if playerClass ~= "DRUID" then
@@ -2935,6 +2930,12 @@ function TPerl_BuildMonkStaggerBar(frame)
 								}
 								frame:EnableMouse(true)
 				end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Textured status bar
@@ -3060,6 +3061,12 @@ function TPerl_BuildMonkStaggerBar_Mists(frame)
         }
         frame:EnableMouse(true)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging behavior
@@ -3209,6 +3216,12 @@ function TPerl_BuildMonkHarmonyBar(frame)
         }
     end
 				frame:EnableMouse(not pconf.lockRunes)
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging behavior
@@ -3364,6 +3377,12 @@ function TPerl_BuildMonkHarmonyBar_Mists(frame)
         }
         frame:EnableMouse(true)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 				
 				frame:SetMovable(true)
 				frame:RegisterForDrag("LeftButton")
@@ -3563,6 +3582,12 @@ function TPerl_BuildPaladinHolyPowerBar_Retail(frame)
         }
         frame:EnableMouse(not (pconf and pconf.lockRunes))
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging behavior
@@ -3728,6 +3753,12 @@ function TPerl_BuildPaladinHolyPowerBar_Mists(frame)
         }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Ensure PaladinPowerBarFrame has correct unit
@@ -3804,6 +3835,11 @@ function TPerl_BuildDKRuneFrame(frame)
         frame:EnableMouse(not pconf.lockRunes)
     end
 
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
     ---------------------------------------------------
     -- Dragging behavior
     ---------------------------------------------------
@@ -3833,7 +3869,7 @@ function TPerl_BuildDKRuneFrame(frame)
     -- Create rune buttons
     ---------------------------------------------------
     frame.Runes = {}
-    local spacing = 4
+    local spacing = 2
     for i = 1, 6 do
         local rune = CreateFrame("Frame", nil, frame, "RuneButtonIndividualTemplate")
         rune:SetSize(30, 30)
@@ -3887,6 +3923,11 @@ function TPerl_BuildDKRuneFrame_Mists(frame)
         frame:EnableMouse(not pconf.lockRunes)
     end
 
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
     ---------------------------------------------------
     -- Dragging behavior
     ---------------------------------------------------
@@ -4044,6 +4085,12 @@ function TPerl_BuildWarlockSoulShardBar_Mists(frame)
         MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4131,6 +4178,12 @@ function TPerl_BuildWarlockDemonicFuryBar_Mists(frame)
         }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4236,6 +4289,12 @@ function TPerl_BuildWarlockBurningEmbersBar_Mists(frame)
         MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4322,6 +4381,12 @@ function TPerl_BuildWarlockSoulShardBar_Retail(frame)
         MovableSoulShardBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4460,6 +4525,12 @@ function TPerl_BuildMageArcaneChargesBar_Retail(frame)
         }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4525,8 +4596,6 @@ function TPerl_BuildMageArcaneChargesBar_Retail(frame)
     frame:UpdateCharges()
 end
 
-
-
 function TPerl_BuildMageArcaneChargesBar_Mists(frame)
     frame:SetSize(128, 32)
     frame:SetFrameStrata("LOW")
@@ -4554,6 +4623,12 @@ function TPerl_BuildMageArcaneChargesBar_Mists(frame)
         }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     frame:RegisterForDrag("LeftButton")
     frame:SetMovable(true)
@@ -4743,6 +4818,13 @@ function TPerl_BuildEvokerEssenceBar_Retail(frame)
         MovableEssenceBarPos = { point = "CENTER", relativePoint = "CENTER", x = 0, y = -100 }
         frame:EnableMouse(not pconf.lockRunes)
     end
+				
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging
@@ -4877,6 +4959,12 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
         }
         frame:EnableMouse(not pconf.lockRunes)
     end
+   
+			 if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging behavior
@@ -5014,6 +5102,12 @@ function TPerl_BuildBalanceBar_Mists(frame)
         EclipseBarFrame:Show()
         EclipseBarFrame:EnableMouse(false)
     end
+				
+				if not pconf.showRunes then
+								frame:Hide()
+				elseif pconf.showRunes then
+								frame:Show()
+				end
 
     ---------------------------------------------------
     -- Dragging behavior
