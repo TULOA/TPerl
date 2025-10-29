@@ -4330,7 +4330,7 @@ function TPerl_NeedsOffset()
 		
 		if playerClass == "PRIEST" then
 			--Offset for Priest is:
-			return 0, 10
+			return 15, 10
 		end
 		
 		--Warlock has special needs based on spec.

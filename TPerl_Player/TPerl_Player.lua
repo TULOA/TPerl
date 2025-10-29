@@ -4898,15 +4898,15 @@ function TPerl_GetPriestSpec()
 end
 
 function TPerl_BuildPriestShadowOrbBar_Mists(frame)
+    ----------------------------------------------------------------
+    -- Frame shell & placement
+    ----------------------------------------------------------------
     frame:SetFrameStrata("LOW")
     frame:SetSize(160, 40)
-
-    ---------------------------------------------------
-    -- Restore or initialize saved position
-    ---------------------------------------------------
     frame:ClearAllPoints()
-    if pconf.dockRunes then
-        frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 0, 0)
+
+    if pconf and pconf.dockRunes then
+        frame:SetPoint("TOP", TPerl_Player, "BOTTOM", 15, 10)
         frame:EnableMouse(false)
     elseif TPerlSpecialPowerBarFramePos and TPerlSpecialPowerBarFramePos.point then
         frame:SetPoint(
@@ -4916,37 +4916,33 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
             TPerlSpecialPowerBarFramePos.x,
             TPerlSpecialPowerBarFramePos.y
         )
-        frame:EnableMouse(not pconf.lockRunes)
+        frame:EnableMouse(not (pconf and pconf.lockRunes))
     else
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, -100)
         TPerlSpecialPowerBarFramePos = {
             point = "CENTER", relativePoint = "CENTER", x = 0, y = -100,
         }
-        frame:EnableMouse(not pconf.lockRunes)
+        frame:EnableMouse(not (pconf and pconf.lockRunes))
     end
-   
-			 if not pconf.showRunes then
-								frame:Hide()
-				elseif pconf.showRunes then
-								frame:Show()
-				end
 
-    ---------------------------------------------------
-    -- Dragging behavior
-    ---------------------------------------------------
+    if pconf and pconf.showRunes == false then
+        frame:Hide()
+    else
+        frame:Show()
+    end
+
+    -- Dragging
     frame:RegisterForDrag("LeftButton")
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
-
     frame:SetScript("OnDragStart", function(self)
-        if not pconf.lockRunes and not pconf.dockRunes then
+        if not (pconf and pconf.lockRunes) and not (pconf and pconf.dockRunes) then
             self:StartMoving()
         end
     end)
-
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        if not pconf.dockRunes then
+        if not (pconf and pconf.dockRunes) then
             local point, _, relativePoint, xOfs, yOfs = self:GetPoint()
             TPerlSpecialPowerBarFramePos = {
                 point = point,
@@ -4957,15 +4953,37 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
         end
     end)
 
-    ---------------------------------------------------
-    -- Create Shadow Orbs (using Blizzard template)
-    ---------------------------------------------------
+    ----------------------------------------------------------------
+    -- Constants / helpers
+    ----------------------------------------------------------------
+    local SHADOW_ORBS_POWER = _G.SPELL_POWER_SHADOW_ORBS
+                           or (Enum and Enum.PowerType and Enum.PowerType.ShadowOrbs)
+                           or 13
+    local function GetOrbCount()
+        if type(GetShadowOrbs) == "function" then
+            return GetShadowOrbs() or 0
+        end
+        return (UnitPower("player", SHADOW_ORBS_POWER) or 0)
+    end
+    local function GetMaxOrbs()
+        local maxp = UnitPowerMax and UnitPowerMax("player", SHADOW_ORBS_POWER) or nil
+        local fall = _G.PRIEST_BAR_NUM_ORBS or 5
+        if maxp and maxp > 0 then return maxp end
+        return fall
+    end
+
+    ----------------------------------------------------------------
+    -- Create orbs
+    ----------------------------------------------------------------
     frame.orbs = {}
+    local NUM_ORBS = GetMaxOrbs()
     local spacing = -5
 
-    for i = 1, PRIEST_BAR_NUM_ORBS do
+    for i = 1, NUM_ORBS do
         local orb = CreateFrame("Frame", nil, frame, "ShadowOrbTemplate")
-        Mixin(orb, PriestBarOrbMixin)
+        if PriestBarOrbMixin then
+            Mixin(orb, PriestBarOrbMixin)
+        end
         orb.layoutIndex = i
         orb:SetSize(38, 37)
 
@@ -4975,51 +4993,161 @@ function TPerl_BuildPriestShadowOrbBar_Mists(frame)
             orb:SetPoint("LEFT", frame.orbs[i-1], "RIGHT", spacing, 0)
         end
 
+        -- Track state
+        orb.active = false
         frame.orbs[i] = orb
     end
 
-    ---------------------------------------------------
-    -- Update logic
-    ---------------------------------------------------
-    local function UpdateOrbs()
-        local numOrbs = UnitPower("player", Enum.PowerType.ShadowOrbs)
-
-        if numOrbs == 0 then
-            -- Force clear when all orbs are spent
-            for i = 1, PRIEST_BAR_NUM_ORBS do
-                local orb = frame.orbs[i]
+    ----------------------------------------------------------------
+    -- Animation helpers (Blizzard parity + safe fallbacks)
+    ----------------------------------------------------------------
+    local function EnsureAnimOutFinisher(orb)
+        if orb and orb.animOut and not orb._animOutWired then
+            orb.animOut:SetScript("OnFinished", function()
+                if orb.orb then orb.orb:SetAlpha(0) end
+                if orb.bg then orb.bg:SetAlpha(0.5) end
+                if orb.highlight then orb.highlight:SetAlpha(0) end
+                if orb.glow then orb.glow:SetAlpha(0) end
                 orb.active = false
-                orb.animIn:Stop()
-                orb.animOut:Stop()
-                orb.orb:SetAlpha(0)
-                orb.bg:SetAlpha(0.5)
-                orb.highlight:SetAlpha(0)
-                orb.glow:SetAlpha(0)
-            end
+            end)
+            orb._animOutWired = true
+        end
+    end
+
+    local function ActivateOrb(orb)
+        if not orb then return end
+        if orb.SetActive then
+            if not orb.active then orb:SetActive(true) end
+            orb.active = true
+            return
+        end
+        -- Fallback visuals
+        if orb.animIn then
+            if orb.animOut then orb.animOut:Stop() end
+            orb.animIn:Stop()
+            if orb.orb then orb.orb:SetAlpha(1) end
+            if orb.bg then orb.bg:SetAlpha(1) end
+            if orb.highlight then orb.highlight:SetAlpha(1) end
+            if orb.glow then orb.glow:SetAlpha(1) end
+            orb.animIn:Play()
         else
-            -- Normal logic: mark active/inactive
-            for i = 1, PRIEST_BAR_NUM_ORBS do
-                local shouldShow = i <= numOrbs
-                frame.orbs[i]:SetActive(shouldShow)
+            if orb.orb then orb.orb:SetAlpha(1) end
+            if orb.bg then orb.bg:SetAlpha(1) end
+            if orb.highlight then orb.highlight:SetAlpha(1) end
+            if orb.glow then orb.glow:SetAlpha(1) end
+        end
+        orb.active = true
+    end
+
+    local function DeactivateOrb(orb)
+        if not orb then return end
+        if orb.SetActive then
+            if orb.active then orb:SetActive(false) end
+            orb.active = false
+            return
+        end
+        EnsureAnimOutFinisher(orb)
+        if orb.animOut then
+            if orb.animIn then orb.animIn:Stop() end
+            orb.animOut:Stop()
+            orb.animOut:Play()
+        else
+            -- No anims: immediate off
+            if orb.orb then orb.orb:SetAlpha(0) end
+            if orb.bg then orb.bg:SetAlpha(0.5) end
+            if orb.highlight then orb.highlight:SetAlpha(0) end
+            if orb.glow then orb.glow:SetAlpha(0) end
+            orb.active = false
+        end
+    end
+
+    local function HardClearAllOrbs()
+        for i = 1, NUM_ORBS do
+            local orb = frame.orbs[i]
+            if orb then
+                if orb.animIn then orb.animIn:Stop() end
+                if orb.animOut then orb.animOut:Stop() end
+                if orb.orb then orb.orb:SetAlpha(0) end
+                if orb.bg then orb.bg:SetAlpha(0.5) end
+                if orb.highlight then orb.highlight:SetAlpha(0) end
+                if orb.glow then orb.glow:SetAlpha(0) end
+                if orb.SetActive then orb:SetActive(false) end
+                orb.active = false
             end
         end
     end
 
-    ---------------------------------------------------
+    for i = 1, NUM_ORBS do
+        EnsureAnimOutFinisher(frame.orbs[i])
+    end
+
+    ----------------------------------------------------------------
+    -- Update logic
+    ----------------------------------------------------------------
+    local lastCount = -1
+    local function UpdateOrbs(force)
+        local num = GetOrbCount()
+        if num < 0 then num = 0 end
+
+        if not force and num == lastCount then
+            return
+        end
+
+        -- Gaining orbs: light from low to high
+        if lastCount < num then
+            for i = (lastCount + 1), num do
+                ActivateOrb(frame.orbs[i])
+            end
+        end
+
+        -- Losing orbs: extinguish from high to low (Blizzard feel)
+        if lastCount > num then
+            for i = lastCount, (num + 1), -1 do
+                DeactivateOrb(frame.orbs[i])
+            end
+        end
+
+        -- Special safety at zero to avoid a "ghost orb"
+        if num == 0 then
+            HardClearAllOrbs()
+        end
+
+        lastCount = num
+    end
+
+    ----------------------------------------------------------------
     -- Events
-    ---------------------------------------------------
-    frame:RegisterEvent("UNIT_POWER_FREQUENT")
+    ----------------------------------------------------------------
+    frame:UnregisterAllEvents()
     frame:RegisterEvent("PLAYER_ENTERING_WORLD")
     frame:RegisterEvent("UNIT_DISPLAYPOWER")
-    frame:SetScript("OnEvent", function(self, event, arg1, arg2)
-        if (event == "UNIT_POWER_FREQUENT" and arg1 == "player" and arg2 == "SHADOW_ORBS")
-            or event == "PLAYER_ENTERING_WORLD"
-            or event == "UNIT_DISPLAYPOWER" then
-            UpdateOrbs()
+    frame:RegisterEvent("UNIT_POWER_UPDATE")
+    frame:RegisterEvent("UNIT_POWER_FREQUENT")
+    frame:RegisterEvent("SPELLS_CHANGED")
+    frame:RegisterEvent("PLAYER_TALENT_UPDATE")
+
+    frame:SetScript("OnEvent", function(self, event, unit, powertoken)
+        if event == "PLAYER_ENTERING_WORLD"
+        or event == "SPELLS_CHANGED"
+        or event == "PLAYER_TALENT_UPDATE" then
+            UpdateOrbs(true)
+            return
+        end
+
+        if event == "UNIT_DISPLAYPOWER" and unit == "player" then
+            UpdateOrbs(true)
+            return
+        end
+
+        if (event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT") and unit == "player" then
+            -- Some clients don’t consistently pass "SHADOW_ORBS"; just update.
+            UpdateOrbs(false)
+            return
         end
     end)
 
-    UpdateOrbs()
+    -- Initial paint
+    UpdateOrbs(true)
 end
 
 
