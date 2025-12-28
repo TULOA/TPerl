@@ -3794,8 +3794,9 @@ end
 function TPerl_LockRunes_OnConfigClick(self)
 	local checked = OptChecked("LockRunes")
 
-
- TPerlSpecialPowerBarFrame:EnableMouse(not checked)
+ if TPerlSpecialPowerBarFrame then
+  TPerlSpecialPowerBarFrame:EnableMouse(not checked)
+	end
 	if TPerlSpecialPowerBarFrame2 then
 	 TPerlSpecialPowerBarFrame2:EnableMouse(not checked)
 	end
@@ -3846,12 +3847,16 @@ function TPerl_ShowRunes_OnClick(self)
 	local checked = OptChecked("ShowRunes")
 	
 	if checked == false then
-		TPerlSpecialPowerBarFrame:Hide()
+	 if TPerlSpecialPowerBarFrame then
+		 TPerlSpecialPowerBarFrame:Hide()
+		end
 		if TPerlSpecialPowerBarFrame2 then
 		 TPerlSpecialPowerBarFrame2:Hide()
 		end
 	else
-	 TPerlSpecialPowerBarFrame:Show()
+	 if TPerlSpecialPowerBarFrame then
+	  TPerlSpecialPowerBarFrame:Show()
+		end
 		if TPerlSpecialPowerBarFrame2 then
 		 TPerlSpecialPowerBarFrame2:Show()
 		end

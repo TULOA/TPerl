@@ -126,12 +126,16 @@ TPerl_Roster = { }
 -- NUM_RAID_GROUPS = 8
 -- MEMBERS_PER_RAID_GROUP = 5
 
-local LOCALIZED_CLASS_NAMES_MALE = LOCALIZED_CLASS_NAMES_MALE
-local CLASS_COUNT = 0
-for k, v in pairs(LOCALIZED_CLASS_NAMES_MALE) do
-	if k ~= "Adventurer" then
-		CLASS_COUNT = CLASS_COUNT + 1
-	end
+-- Fixed CLASS_COUNT based on WoW version to avoid "Adventurer" off-by-one issues
+local CLASS_COUNT
+if IsRetail then
+    CLASS_COUNT = 13  -- Warrior, Death Knight, Rogue, Hunter, Mage, Warlock, Priest, Druid, Shaman, Paladin, Monk, Demon Hunter, Evoker
+elseif IsCataClassic then
+    CLASS_COUNT = 10  -- Up to Death Knight (no Monk)
+elseif IsMistsClassic then
+    CLASS_COUNT = 11  -- Up to Monk (no Demon Hunter/Evoker)
+else
+    CLASS_COUNT = 9   -- Vanilla/TBC/WotLK: Warrior to Paladin
 end
 
 local resSpells
@@ -2619,13 +2623,14 @@ local function GroupFilter(n)
 			f = tostring(n)
 		end
 
-		local invalid
+		local needsReset
 		for i = 1, CLASS_COUNT do
 			if (not rconf.class[i]) then
-				invalid = true
+				needsReset = true
+				break
 			end
 		end
-		if (invalid) then
+		if needsReset then
 			rconf.class = DefaultRaidClasses()
 		end
 
