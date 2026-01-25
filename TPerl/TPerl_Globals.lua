@@ -473,7 +473,11 @@ local function TPerl_RegisterLDB()
 
     -- Register with LibDBIcon so a minimap button shows
     LDI:Register("TPerl_UnitFrames", ldbSource, TPerlDB.minimap)
-				--TPerl_MinimapButton_Frame:Hide()
+				if not TPerlDB.minimap.enable then
+						LDI:Hide("TPerl_UnitFrames")
+				else
+						LDI:Show("TPerl_UnitFrames")
+				end
 end
 
 

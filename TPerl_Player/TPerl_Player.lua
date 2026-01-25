@@ -24,6 +24,7 @@ end
 --@end-debug@]===]
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsCataClassic = WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC
 local IsMistsClassic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
@@ -2213,7 +2214,7 @@ function TPerl_Player_Set_Bits(self)
 		end
 
 
-		if not IsVanillaClassic then
+		if (not IsVanillaClassic) and (not IsTBCAnni) then
 			if (pconf.totems and pconf.totems.enable and not self.totemHooked) then
 				local moving
 				hooksecurefunc(TotemFrame, "SetPoint", function(self)

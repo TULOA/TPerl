@@ -1238,7 +1238,7 @@
 						TPerl_Options_RegisterProtected(self)
 					</OnLoad>
 					<OnShow>
-						local class = TPerlDB.raid.class[self:GetID()].name
+						local class = TPerlDB.raid.class[self:GetParent():GetID()].name
 						local textFrame = _G[self:GetName().."Text"]
 						textFrame:SetText(LOCALIZED_CLASS_NAMES_MALE[class])
 						self:SetHitRectInsets(0, -(textFrame:GetStringWidth()), 0, 0)
@@ -4800,11 +4800,14 @@
 								self.configBase = "TPerlDB.minimap"
 								self.configIndex = "enable"
 								self.configClick = function()
-									if (TPerlDB.minimap.enable) then
-										LibDBIcon10_TPerl_UnitFrames:Show()
-									else
-										LibDBIcon10_TPerl_UnitFrames:Hide()
-									end
+								  TPerlDB.minimap.enable = not TPerlDB.minimap.enable
+
+								  local LDI = LibStub("LibDBIcon-1.0", true)
+								  if TPerlDB.minimap.enable then
+									LDI:Show("TPerl_UnitFrames")
+								  else
+								    LDI:Hide("TPerl_UnitFrames")
+								  end
 								end
 							</OnLoad>
 						</Scripts>
@@ -12191,13 +12194,8 @@
 						<Scripts>
 							<OnLoad>
 								local LOCALIZED_CLASS_NAMES_MALE = LOCALIZED_CLASS_NAMES_MALE
-								local CLASS_COUNT = 0
+								local CLASS_COUNT = #(CLASS_SORT_ORDER or DefaultRaidClasses())
 								local GROUP_COUNT = 8
-								for k, v in pairs(LOCALIZED_CLASS_NAMES_MALE) do
-									if k ~= "Adventurer" then
-										CLASS_COUNT = CLASS_COUNT + 1
-									end
-								end
 								TPerl_OptionsSetMyText(self, "TPERL_CONF_RAID_SHOW")
 								self.Validate = function()
 									TPerl_Options_EnableSibling(self, "NotInBG")
@@ -13223,7 +13221,7 @@
 								</Anchors>
 								<Scripts>
 									<OnLoad>
-										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC then
+										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC then
 											self:Hide()
 										end
 									</OnLoad>
@@ -13239,7 +13237,7 @@
 								</Anchors>
 								<Scripts>
 									<OnLoad>
-										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC then
+										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC then
 											self:Hide()
 										end
 									</OnLoad>
@@ -13256,7 +13254,7 @@
 								</Anchors>
 								<Scripts>
 									<OnLoad>
-										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then
+										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then
 											self:Hide()
 										end
 									</OnLoad>
@@ -13273,7 +13271,7 @@
 								</Anchors>
 								<Scripts>
 									<OnLoad>
-										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then
+										if WOW_PROJECT_ID == WOW_PROJECT_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC or WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC then
 											self:Hide()
 										end
 									</OnLoad>

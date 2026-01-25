@@ -2623,14 +2623,13 @@ local function GroupFilter(n)
 			f = tostring(n)
 		end
 
-		local needsReset
+		local invalid
 		for i = 1, CLASS_COUNT do
 			if (not rconf.class[i]) then
-				needsReset = true
-				break
+				invalid = true
 			end
 		end
-		if needsReset then
+		if (invalid) then
 			rconf.class = DefaultRaidClasses()
 		end
 

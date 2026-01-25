@@ -13,6 +13,7 @@ end, "$Revision: " .. GetAddOnMetadata("TPerl", "X-Revision") .. " $")
 TPerl_SetModuleRevision("$Revision: " .. GetAddOnMetadata("TPerl", "X-Revision") .. " $")
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsCataClassic = WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC
 local IsMistsClassic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC

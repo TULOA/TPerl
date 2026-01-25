@@ -8,15 +8,11 @@ local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 local IsCataClassic = WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC
 local IsMistsClassic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 
 local LOCALIZED_CLASS_NAMES_MALE = LOCALIZED_CLASS_NAMES_MALE
-local CLASS_COUNT = 0
-for k, v in pairs(LOCALIZED_CLASS_NAMES_MALE) do
-	if k ~= "Adventurer" then
-		CLASS_COUNT = CLASS_COUNT + 1
-	end
-end
+local CLASS_COUNT = #(CLASS_SORT_ORDER or DefaultRaidClasses())
 
 local protected = { }
 
@@ -3794,9 +3790,8 @@ end
 function TPerl_LockRunes_OnConfigClick(self)
 	local checked = OptChecked("LockRunes")
 
- if TPerlSpecialPowerBarFrame then
-  TPerlSpecialPowerBarFrame:EnableMouse(not checked)
-	end
+
+ TPerlSpecialPowerBarFrame:EnableMouse(not checked)
 	if TPerlSpecialPowerBarFrame2 then
 	 TPerlSpecialPowerBarFrame2:EnableMouse(not checked)
 	end
@@ -3847,16 +3842,12 @@ function TPerl_ShowRunes_OnClick(self)
 	local checked = OptChecked("ShowRunes")
 	
 	if checked == false then
-	 if TPerlSpecialPowerBarFrame then
-		 TPerlSpecialPowerBarFrame:Hide()
-		end
+		TPerlSpecialPowerBarFrame:Hide()
 		if TPerlSpecialPowerBarFrame2 then
 		 TPerlSpecialPowerBarFrame2:Hide()
 		end
 	else
-	 if TPerlSpecialPowerBarFrame then
-	  TPerlSpecialPowerBarFrame:Show()
-		end
+	 TPerlSpecialPowerBarFrame:Show()
 		if TPerlSpecialPowerBarFrame2 then
 		 TPerlSpecialPowerBarFrame2:Show()
 		end

@@ -18,6 +18,7 @@ end
 --@end-debug@]===]
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
@@ -81,6 +82,8 @@ function TPerl_Player_Buffs_Position(self)
 			end]]
 
 			local _, playerClass = UnitClass("player")
+			-- Be EXTRA positive
+			playerClass = strupper(playerClass)
 			local extraBar
 
 			if (playerClass == "DRUID" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0 and not pconf.noDruidBar) or (playerClass == "PRIEST" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "DEATHKNIGHT") then
@@ -91,7 +94,7 @@ function TPerl_Player_Buffs_Position(self)
 
 			local offset = ((extraBar + (pconf.repBar and 1 or 0) + (pconf.xpBar and 1 or 0)) * 13.5)
 
-			if pconf.dockRunes then
+			if pconf.dockRunes and (not IsTBCAnni) then
 				if pconf.extendPortrait then
 					self.buffFrame:SetPoint("TOPLEFT", self, "BOTTOMLEFT", 5, 0 - 28)
 				else
@@ -106,7 +109,7 @@ function TPerl_Player_Buffs_Position(self)
 			end
 		end
 
-		if (pconf.buffs.above) then
+		if (pconf.buffs.above) and (not IsTBCAnni) then
 			self.debuffFrame:SetPoint("BOTTOMLEFT", self.buffFrame, "TOPLEFT", 0, 2)
 		else
 			self.debuffFrame:SetPoint("TOPLEFT", self.buffFrame, "BOTTOMLEFT", 0, -2)
@@ -186,7 +189,7 @@ function TPerl_Player_BuffSetup(self)
 	if (pconf.buffs.hideBlizzard) then
 		BuffFrame:UnregisterEvent("UNIT_AURA")
 		BuffFrame:Hide()
-		if not IsRetail then
+		if (not IsRetail) and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Hide()
 		end
 	else

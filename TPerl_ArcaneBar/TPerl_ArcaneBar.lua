@@ -20,6 +20,7 @@ end, "$Revision:  $")
 local _, _, _, clientRevision = GetBuildInfo()
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
@@ -99,7 +100,7 @@ local function overrideToggle(value)
 					return TPerl_ArcaneBar_OnEvent(CastingBarFrame, event, ...)
 				end
 				for i, event in pairs(events) do
-					if IsRetail then
+					if IsRetail or IsTBCAnni then
 						PlayerCastingBarFrame:RegisterEvent(event)
 					else
 						if event ~= "UNIT_SPELLCAST_INTERRUPTIBLE" and event ~= "UNIT_SPELLCAST_NOT_INTERRUPTIBLE" then
@@ -111,7 +112,7 @@ local function overrideToggle(value)
 			end
 		else
 			if (not pconf.bar.Overrided) then
-				if IsRetail then
+				if IsRetail or IsTBCAnni then
 					PlayerCastingBarFrame:Hide()
 					PlayerCastingBarFrame:UnregisterAllEvents()
 				else
