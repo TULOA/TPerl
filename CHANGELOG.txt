@@ -1,0 +1,9 @@
+Changelog:
+
+Fix Raid frame in the TPerl Options.
+Fix CastBarFrame error.
+Fix Minimap for stock minimap on TBC Classic.
+Fixed PlayerBuffs EnchantFrame error.
+Fixed FrameOptions OnLoad TPerlDB error.
+Fixed extra gap in buffs by player for TBC Classic due to TBC classic not having special power bars.
+
