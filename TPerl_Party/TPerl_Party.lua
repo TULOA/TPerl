@@ -18,6 +18,7 @@ end, "$Revision:  $")
 local percD = "%d"..PERCENT_SYMBOL
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsCataClassic = WOW_PROJECT_ID == WOW_PROJECT_CATA_CLASSIC
 local IsMistsClassic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
@@ -138,7 +139,7 @@ function TPerl_Party_Events_OnLoad(self)
 
 	UIParent:UnregisterEvent("GROUP_ROSTER_UPDATE") -- IMPORTANT! Stops raid framerate lagging when members join/leave/zone
 
-	if IsRetail then
+	if IsRetail and IsTBCAnni then
 		TPerl_BlizzFrameDisable(PartyFrame)
 	else
 		for i = 1, 4 do
