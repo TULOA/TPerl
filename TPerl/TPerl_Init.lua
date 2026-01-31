@@ -610,6 +610,7 @@ function TPerl_Init()
 	end--]]
 
 	--TPerl_RegisterSMBarTextures()
+	TPerl_pcall(TPerl_RegisterSMFonts)
 
 	TPerl_pcall(TPerl_DebufHighlightInit)
 
@@ -664,11 +665,14 @@ function TPerl_StatsFrameSetup(self, others, offset)
 		end
 	end
 
+	local fontPath = TPerl_GetFont()
+	local fontScale = TPerl_GetFontScale()
+
 	if (conf.bar.fat) then
 		if (StatsFrame == TPerl_Player_PetstatsFrame) then
-			healthBarText:SetFontObject(GameFontNormalSmall)
+			healthBarText:SetFont(fontPath, 10 * fontScale, "")
 		else
-			healthBarText:SetFontObject(GameFontNormal)
+			healthBarText:SetFont(fontPath, 12 * fontScale, "")
 		end
 
 		local x = 10
@@ -700,7 +704,7 @@ function TPerl_StatsFrameSetup(self, others, offset)
 			end
 		end
 	else
-		healthBarText:SetFontObject(GameFontNormalSmall)
+		healthBarText:SetFont(fontPath, 10 * fontScale, "")
 
 		healthBar:ClearAllPoints()
 		healthBar:SetPoint("TOPLEFT", 8, -9 + offset)
@@ -746,6 +750,188 @@ function TPerl_SetTextTransparency()
 	if TPerl_Target_AssistFrametext then
 		local r, g, b = TPerl_Target_AssistFrametext:GetTextColor()
 		TPerl_Target_AssistFrametext:SetTextColor(r, g, b, t)
+	end
+end
+
+-- Font registration system (parallel to bar registration)
+local TPerlFontStrings = {}
+local fontSizeMap = {
+	-- Maps Blizzard font objects to their base sizes
+	GameFontNormal = 12,
+	GameFontNormalSmall = 10,
+	GameFontHighlight = 12,
+	GameFontHighlightSmall = 10,
+	GameFontHighlightMedium = 13,
+	GameFontNormalLarge = 14,
+	GameFontNormalHuge = 18,
+	NumberFontNormal = 12,
+	NumberFontNormalLarge = 14,
+	NumberFontNormalHuge = 18,
+}
+
+-- TPerl_RegisterFontString
+function TPerl_RegisterFontString(fontString, baseFontObject)
+	if fontString then
+		local baseSize = fontSizeMap[baseFontObject] or 10
+		tinsert(TPerlFontStrings, {
+			fontString = fontString,
+			baseFontObject = baseFontObject or "GameFontNormalSmall",
+			baseSize = baseSize,
+		})
+		if (init_done) then
+			TPerl_SetOneFont(fontString, baseSize)
+		end
+	end
+end
+
+-- TPerl_SetOneFont - Apply font to a single FontString
+local function TPerl_SetOneFont(fontString, baseSize)
+	local fontPath = TPerl_GetFont()
+	local scale = TPerl_GetFontScale()
+	local newSize = baseSize * scale
+
+	-- Get current font flags (outline, etc.)
+	local _, _, flags = fontString:GetFont()
+
+	fontString:SetFont(fontPath, newSize, flags or "")
+end
+
+-- TPerl_SetFonts - Apply font to all registered FontStrings
+function TPerl_SetFonts()
+	local fontPath = TPerl_GetFont()
+	local scale = TPerl_GetFontScale()
+
+	-- Apply to manually registered FontStrings
+	for k, v in pairs(TPerlFontStrings) do
+		local newSize = v.baseSize * scale
+		local _, _, flags = v.fontString:GetFont()
+		v.fontString:SetFont(fontPath, newSize, flags or "")
+	end
+
+	-- Apply to all unit text elements (registered via TPerl_RegisterUnitText)
+	for k, v in pairs(unitText) do
+		if v and v.GetFont then
+			local _, size, flags = v:GetFont()
+			if size then
+				-- Use the existing size as base, apply scale
+				local baseSize = size / (conf and conf.font and conf.font.scale or 1)
+				v:SetFont(fontPath, baseSize * scale, flags or "")
+			end
+		end
+	end
+
+	-- Apply to specific named frames
+	local frames = {
+		"TPerl_Player_TargettingFrametext",
+		"TPerl_Target_AssistFrametext",
+		"TPerl_PlayernameFrametext",
+		"TPerl_PlayerlevelFrametext",
+		"TPerl_TargetnameFrametext",
+		"TPerl_TargetlevelFrametext",
+		"TPerl_Player_PetnameFrametext",
+		"TPerl_FocusnameFrametext",
+		"TPerl_FocuslevelFrametext",
+	}
+	for _, frameName in pairs(frames) do
+		local f = _G[frameName]
+		if f and f.GetFont then
+			local _, size, flags = f:GetFont()
+			if size then
+				local baseSize = size / (conf and conf.font and conf.font.scale or 1)
+				f:SetFont(fontPath, baseSize * scale, flags or "")
+			end
+		end
+	end
+
+	-- Apply to party frames
+	for i = 1, 4 do
+		local partyFrame = _G["TPerl_party"..i]
+		if partyFrame then
+			local nameText = _G["TPerl_party"..i.."nameFrametext"]
+			local levelText = _G["TPerl_party"..i.."levelFrametext"]
+			if nameText and nameText.GetFont then
+				local _, size, flags = nameText:GetFont()
+				if size then
+					local baseSize = size / (conf and conf.font and conf.font.scale or 1)
+					nameText:SetFont(fontPath, baseSize * scale, flags or "")
+				end
+			end
+			if levelText and levelText.GetFont then
+				local _, size, flags = levelText:GetFont()
+				if size then
+					local baseSize = size / (conf and conf.font and conf.font.scale or 1)
+					levelText:SetFont(fontPath, baseSize * scale, flags or "")
+				end
+			end
+		end
+	end
+
+	-- Helper function to set font on a FontString with fixed base size
+	local function SetFontOnElement(element, baseSize)
+		if element and element.GetFont then
+			local _, _, flags = element:GetFont()
+			element:SetFont(fontPath, baseSize * scale, flags or "")
+		end
+	end
+
+	-- Apply to player XP, Rep, and Druid bars by global frame name (base size 10 - GameFontNormalSmall)
+	local playerBarNames = {
+		"TPerl_PlayerstatsFramexpBar",
+		"TPerl_PlayerstatsFramerepBar",
+		"TPerl_PlayerstatsFramedruidBar",
+	}
+	for _, barName in pairs(playerBarNames) do
+		local bar = _G[barName]
+		if bar then
+			SetFontOnElement(_G[barName.."text"], 10)
+			SetFontOnElement(_G[barName.."percent"], 10)
+		end
+	end
+	-- Also try via statsFrame reference
+	if TPerl_Player and TPerl_Player.statsFrame then
+		local bars = {TPerl_Player.statsFrame.xpBar, TPerl_Player.statsFrame.repBar, TPerl_Player.statsFrame.druidBar}
+		for _, bar in pairs(bars) do
+			if bar then
+				SetFontOnElement(bar.text, 10)
+				SetFontOnElement(bar.percent, 10)
+			end
+		end
+	end
+
+	-- Apply to health/mana bar text on all stats frames (base size 10 - GameFontNormalSmall)
+	local statsFrames = {
+		TPerl_Player and TPerl_Player.statsFrame,
+		TPerl_Target and TPerl_Target.statsFrame,
+		TPerl_Player_Pet and TPerl_Player_Pet.statsFrame,
+		TPerl_Focus and TPerl_Focus.statsFrame,
+		TPerl_TargetTarget and TPerl_TargetTarget.statsFrame,
+	}
+	for _, sf in pairs(statsFrames) do
+		if sf then
+			if sf.healthBar then
+				SetFontOnElement(sf.healthBar.text, 10)
+				SetFontOnElement(sf.healthBar.percent, 10)
+			end
+			if sf.manaBar then
+				SetFontOnElement(sf.manaBar.text, 10)
+				SetFontOnElement(sf.manaBar.percent, 10)
+			end
+		end
+	end
+
+	-- Apply to party frames stats bars
+	for i = 1, 4 do
+		local partyFrame = _G["TPerl_party"..i]
+		if partyFrame and partyFrame.statsFrame then
+			if partyFrame.statsFrame.healthBar then
+				SetFontOnElement(partyFrame.statsFrame.healthBar.text, 10)
+				SetFontOnElement(partyFrame.statsFrame.healthBar.percent, 10)
+			end
+			if partyFrame.statsFrame.manaBar then
+				SetFontOnElement(partyFrame.statsFrame.manaBar.text, 10)
+				SetFontOnElement(partyFrame.statsFrame.manaBar.percent, 10)
+			end
+		end
 	end
 end
 
@@ -805,6 +991,7 @@ function TPerl_OptionActions(which)
 	conf.transparency.text	= min(max(tonumber(conf.transparency.text or 1), 0), 1)
 
 	TPerl_pcall(TPerl_SetBarTextures)
+	TPerl_pcall(TPerl_SetFonts)
 
 	TPerl_pcall(TPerl_SetAllFrames)
 

@@ -669,11 +669,13 @@ local function TPerl_Party_UpdateName(self)
 	self.lastName = Partyname
 	self.lastGUID = UnitGUID(partyid)
 	if (Partyname) then
-		self.nameFrame.text:SetFontObject(GameFontNormal)
+		local fontPath = TPerl_GetFont()
+		local fontScale = TPerl_GetFontScale()
+		self.nameFrame.text:SetFont(fontPath, 12 * fontScale, "")
 		self.nameFrame.text:SetText(Partyname)
 
 		if (self.nameFrame.text:GetStringWidth() > self.nameFrame:GetWidth() - 4) then
-			self.nameFrame.text:SetFontObject(GameFontNormalSmall)
+			self.nameFrame.text:SetFont(fontPath, 10 * fontScale, "")
 		end
 
 		TPerl_ColourFriendlyUnit(self.nameFrame.text, partyid)
@@ -892,8 +894,22 @@ local function TPerl_Party_UpdateMana(self)
 	self.statsFrame.manaBar:SetValue(unitPower)
 
 	if powerType >= 1 then
+		-- For rage/energy/etc, just show the value
 		self.statsFrame.manaBar.percent:SetText(unitPower)
+		self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, unitPowerMax)
+	elseif pconf.percent then
+		-- For mana, use inline percentage when percent option is enabled
+		local showPercent = 100 * powerPercent
+		if showPercent < 10 then
+			self.statsFrame.manaBar.text:SetFormattedText("%d/%d (%.1f%%)", unitPower, unitPowerMax, showPercent)
+		else
+			self.statsFrame.manaBar.text:SetFormattedText("%d/%d (%d%%)", unitPower, unitPowerMax, showPercent)
+		end
+		-- Hide separate percent element
+		self.statsFrame.manaBar.percent:SetText("")
 	else
+		-- Percent option disabled, show traditional layout
+		self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, unitPowerMax)
 		self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)
 	end
 
@@ -902,8 +918,6 @@ local function TPerl_Party_UpdateMana(self)
 	else
 		self.statsFrame.manaBar.text:Hide()
 	end]]
-
-	self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, unitPowerMax)
 
 	if (not UnitIsConnected(partyid)) then
 		self.statsFrame.healthBar.text:SetText(TPERL_LOC_OFFLINE)
@@ -1602,11 +1616,16 @@ function TPerl_Party_SetWidth(self)
 
 	pconf.size.width = max(0, pconf.size.width or 0)
 
-	local width = (36 * (pconf.percent or 0)) + 122	-- 158 enabled, 122 disabled
+	-- Remove percent width expansion since we use inline percentages
+	local width = 122	-- Same width regardless of percent setting
 	self.statsFrame:SetWidth(width + pconf.size.width)
 	self:SetWidth(CalcWidth(self))
 
 	self.nameFrame:SetWidth(122 + (pconf.size.width / 2))
+
+	-- Hide separate percent elements (using inline percentages now)
+	self.statsFrame.healthBar.percent:Hide()
+	self.statsFrame.manaBar.percent:Hide()
 
 	TPerl_StatsFrameSetup(self)
 end
@@ -1727,13 +1746,9 @@ function TPerl_Party_Set_Bits1(self)
 
 	ShowHideValues(self)
 
-	if (pconf.percent) then
-		self.statsFrame.healthBar.percent:Show()
-		self.statsFrame.manaBar.percent:Show()
-	else
-		self.statsFrame.healthBar.percent:Hide()
-		self.statsFrame.manaBar.percent:Hide()
-	end
+	-- Hide separate percent elements (using inline percentages now)
+	self.statsFrame.healthBar.percent:Hide()
+	self.statsFrame.manaBar.percent:Hide()
 
 	local height = ((pconf.name or 0) * 22) + 2 -- 24 when enabled, 2 when disabled
 
