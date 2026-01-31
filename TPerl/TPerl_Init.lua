@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -570,7 +570,7 @@ function TPerl_Init()
 	if name and enabled then
 		local ver = GetAddOnMetadata and GetAddOnMetadata(name, "Version") or C_AddOns.GetAddOnMetadata(name, "Version")
 		if (tonumber(ver) < 20000.2) then
-			TPerl_Notice("Out-dated version of SupportFuncs detected. This will break the X-Perl Range Finder by replacing standard Blizzard API functions.")
+			TPerl_Notice("Out-dated version of SupportFuncs detected. This will break the TPerl Range Finder by replacing standard Blizzard API functions.")
 		end
 	end
 
@@ -578,7 +578,7 @@ function TPerl_Init()
 	if name and enabled then
 		local ver = GetAddOnMetadata and GetAddOnMetadata(name, "Version") or C_AddOns.GetAddOnMetadata(name, "Version")
 		if (ver < "2.01.00.02") then
-			TPerl_Notice("Out-dated version of AutoBar detected. This will taint the Targetting system for all mods that use them, including X-Perl.")
+			TPerl_Notice("Out-dated version of AutoBar detected. This will taint the Targetting system for all mods that use them, including TPerl.")
 		end
 	end
 
@@ -586,7 +586,7 @@ function TPerl_Init()
 	if name and enabled then
 		local ver = GetAddOnMetadata and GetAddOnMetadata(name, "Version") or C_AddOns.GetAddOnMetadata(name, "Version")
 		if (ver <= "20003.14") then
-			TPerl_Notice("Out-dated version of TrinityBars detected. This will taint the Targetting system for all mods that use them, including X-Perl.")
+			TPerl_Notice("Out-dated version of TrinityBars detected. This will taint the Targetting system for all mods that use them, including TPerl.")
 		end
 	end
 

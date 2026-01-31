@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -9,8 +9,8 @@ if (GetLocale() == "deDE") then
 	TPERL_MINIMAP_HELP2		= "|c00FFFFFFRechts-Klick|r, um das Symbol zu verschieben"
 	TPERL_MINIMAP_HELP3		= "\rTats\195\164chliche Schlachtzugsmitglieder: |c00FFFF80%d|r\rTats\195\164chliche Gruppenmitglieder: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4		= "\rDu bist der tats\195\164chliche Gruppen- oder Schlachtzugsleiter"
-	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r, f\195\188r die X-Perl Speicherausnutzung"
-	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Umschalt|r, f\195\188r die X-Perl Speicherausnutzung seit dem Start"
+	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r, f\195\188r die TPerl Speicherausnutzung"
+	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Umschalt|r, f\195\188r die TPerl Speicherausnutzung seit dem Start"
 
 	TPERL_MINIMENU_OPTIONS			= MAIN_MENU
 	TPERL_MINIMENU_ASSIST			= "Zeige Assistiert-Frame"

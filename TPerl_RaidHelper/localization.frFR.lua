@@ -1,5 +1,5 @@
 if (GetLocale() == "frFR" ) then
-	TPERL_MSG_PREFIX 		= "|c00C05050X-Perl|r "
+	TPERL_MSG_PREFIX 		= "|c00C05050TPerl|r "
 
 	TPERL_TOOLTIP_ASSISTING 	= "Assistance de joueurs"
 	TPERL_TOOLTIP_HEALERS 		= "Soigneurs me ciblant"

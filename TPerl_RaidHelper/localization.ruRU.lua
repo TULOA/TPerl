@@ -4,7 +4,7 @@
 ]]
 
 if (GetLocale() == "ruRU") then
-	TPERL_MSG_PREFIX				= "|c00C05050X-Perl|r "
+	TPERL_MSG_PREFIX				= "|c00C05050TPerl|r "
 
 	TPERL_TOOLTIP_ASSISTING			= "Поддержка игрока:"
 	TPERL_TOOLTIP_HEALERS			= "Целители нацелившись в меня:"

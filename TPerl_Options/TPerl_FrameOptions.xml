@@ -35,7 +35,7 @@
 		</Anchors>
 		<Layers>
 			<Layer level="ARTWORK">
-				<FontString name="$parent_Text" inherits="GameFontNormalSmall" text="X-Perl UnitFrames" justifyH="LEFT">
+				<FontString name="$parent_Text" inherits="GameFontNormalSmall" text="TPerl UnitFrames" justifyH="LEFT">
 					<Anchors>
 						<Anchor point="LEFT">
 							<Offset>
@@ -6089,7 +6089,7 @@
 											if (TPerl_Player_BuffSetup) then
 												TPerl_Player_BuffSetup(TPerl_Player)
 											end
-											if WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC then
+											if WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC and (WOW_PROJECT_ID ~= WOW_PROJECT_BURNING_CRUSADE_CLASSIC) then
 												BuffFrame_Update()
 											end
 										end

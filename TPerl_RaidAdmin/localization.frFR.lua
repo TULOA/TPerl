@@ -1,7 +1,7 @@
 if (GetLocale() == "frFR") then
-TPERL_ADMIN_TITLE			= "X-Perl Raid Admin"
+TPERL_ADMIN_TITLE			= "TPerl Raid Admin"
 
-TPERL_MSG_PREFIX	        	= "|c00C05050X-Perl|r "
+TPERL_MSG_PREFIX	        	= "|c00C05050TPerl|r "
 
 -- Raid Admin
 TPERL_BUTTON_ADMIN_PIN			= "V\195\169rrou de fen\195\170tres"
@@ -23,7 +23,7 @@ TPERL_NO_ROSTER_NAME_GIVEN		= "Pas de nom de roster donn\195\169"
 TPERL_NO_ROSTER_CALLED			= "Pas de roster sauvegard\195\169 appell\195\169 '%s'"
 
 -- Item Checker
-TPERL_CHECK_TITLE			= "X-Perl V\195\169rificateur d'articles"
+TPERL_CHECK_TITLE			= "TPerl V\195\169rificateur d'articles"
 
 TPERL_CHECK_NAME			= "Noms"
 

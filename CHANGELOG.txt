@@ -1,4 +1,8 @@
-Version 1.2.5:
+Version 1.2.6:
 
-Fix issue with hiding PartyFrame due to it being renamed to match Retail.
+Fixed TPerlSpecialPowerBarFrame error in Mists for classes without a Special Power Bar.
+Fixed Buffs not properly positioned when set to display above the player frame in TBC.
+Fixed hiding buffs and debuffs in TBC.
+Fixed hiding debuffs in Mists. This one didnt make it to production and was caught in testing. Thankfully.
+More I dont recall. See comments and GitHub for others.
 

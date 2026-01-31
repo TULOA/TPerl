@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -11,6 +11,7 @@ end, "$Revision:  $")
 local _, _, _, clientRevision = GetBuildInfo()
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
@@ -1936,11 +1937,13 @@ function xpHigh:OptionChange()
 	_, playerClass = UnitClass("player")
 	playerName = UnitName("player")
 
-	if (conf.highlight.enable and (conf.highlight.HOT or conf.highlight.SHIELD or conf.highlight.HEAL or conf.highlight.POM)) then
-		events = true
-		self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	else
-		self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+ if not IsRetail then
+		if (conf.highlight.enable and (conf.highlight.HOT or conf.highlight.SHIELD or conf.highlight.HEAL or conf.highlight.POM)) then
+			events = true
+			self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		else
+			self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+		end
 	end
 
 	if (not conf.highlight.enable or not conf.highlight.HOT) then

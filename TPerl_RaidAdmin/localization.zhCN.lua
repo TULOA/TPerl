@@ -1,7 +1,7 @@
 if (GetLocale() == "zhCN") then
-TPERL_ADMIN_TITLE		= "X-Perl 团队管理"
+TPERL_ADMIN_TITLE		= "TPerl 团队管理"
 
-TPERL_MSG_PREFIX	= "|c00C05050X-Perl|r "
+TPERL_MSG_PREFIX	= "|c00C05050TPerl|r "
 
 -- Raid Admin
 TPERL_BUTTON_ADMIN_PIN		= "固定窗口"
@@ -23,7 +23,7 @@ TPERL_NO_ROSTER_NAME_GIVEN	= "没有该名字的名单"
 TPERL_NO_ROSTER_CALLED		= "保存的名单中没有 '%s'"
 
 -- Item Checker
-TPERL_CHECK_TITLE		= "X-Perl 物品检查"
+TPERL_CHECK_TITLE		= "TPerl 物品检查"
 
 PERL_RAID_TOOLTIP_NOCTRA	= "没有发现CTRA"
 TPERL_CHECK_NAME		= "名称"

@@ -6,7 +6,7 @@
 if (GetLocale() == "ruRU") then
 TPERL_ADMIN_TITLE	= TPerl_ShortProductName.." Рейд Админ"
 
-TPERL_MSG_PREFIX	= "|c00C05050X-Perl|r "
+TPERL_MSG_PREFIX	= "|c00C05050TPerl|r "
 
 -- Raid Admin
 TPERL_BUTTON_ADMIN_PIN		= "Закрепить Окно"

@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -269,7 +269,7 @@ function TPerl_Options_EnableSibling(self, sibling, check2nd, check3rd)
 			if (sibf2) then
 				second = sibf2:GetChecked()
 			else
-				DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000X-Perl|r - No 2nd sibling called '"..sib2.."'")
+				DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000TPerl|r - No 2nd sibling called '"..sib2.."'")
 			end
 		else
 			second = check2nd
@@ -305,14 +305,14 @@ function TPerl_Options_EnableSibling(self, sibling, check2nd, check3rd)
 				siblingFrame:DisableSlider()
 			end
 		else
-			DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000X-Perl|r - No code to disable '"..siblingFrame:GetName().."' type: "..(siblingFrame.GetFrameType or siblingFrame.GetObjectType)(siblingFrame))
+			DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000TPerl|r - No code to disable '"..siblingFrame:GetName().."' type: "..(siblingFrame.GetFrameType or siblingFrame.GetObjectType)(siblingFrame))
 		end
 
 		if siblingFrame.protected then
 			protected[siblingFrame] = result
 		end
 	else
-		DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000X-Perl|r - No sibling found called '"..siblingName.."'")
+		DEFAULT_CHAT_FRAME:AddMessage("|c00FF0000TPerl|r - No sibling found called '"..siblingName.."'")
 	end
 end
 
@@ -3438,7 +3438,7 @@ if (TPerl_UpgradeSettings) then
 
 			ValidateClassNames(old.raid)
 
-			if (old.bar and old.bar.texture and old.bar.texture[1] == "X-Perl 2") then
+			if (old.bar and old.bar.texture and old.bar.texture[1] == "TPerl 2") then
 				old.bar.texture[1] = "BantoBar"
 			end
 
@@ -3790,8 +3790,9 @@ end
 function TPerl_LockRunes_OnConfigClick(self)
 	local checked = OptChecked("LockRunes")
 
-
- TPerlSpecialPowerBarFrame:EnableMouse(not checked)
+ if TPerlSpecialPowerBarFrame then
+  TPerlSpecialPowerBarFrame:EnableMouse(not checked)
+	end
 	if TPerlSpecialPowerBarFrame2 then
 	 TPerlSpecialPowerBarFrame2:EnableMouse(not checked)
 	end

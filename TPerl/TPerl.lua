@@ -708,7 +708,7 @@ do
 			{"Perl v2", "Interface\\Addons\\TPerl\\Images\\TPerl_StatusBar"},
 		}
 		for i = 1, 9 do
-			local name = i == 2 and "BantoBar" or "X-Perl "..i
+			local name = i == 2 and "BantoBar" or "TPerl "..i
 			tinsert(shortlist, {name, "Interface\\Addons\\TPerl\\Images\\TPerl_StatusBar"..(i + 1)})
 		end
 
@@ -717,7 +717,7 @@ do
 				media:Register("statusbar", v[1], v[2])
 			end
 
-			media:Register("border", "X-Perl Thin", "Interface\\Addons\\TPerl\\Images\\TPerl_ThinEdge")
+			media:Register("border", "TPerl Thin", "Interface\\Addons\\TPerl\\Images\\TPerl_ThinEdge")
 		end
 	end
 
@@ -1076,25 +1076,36 @@ end
 local SetValuedText = TPerl_SetValuedText
 
 -- TPerl_SetHealthBar
-function TPerl_SetHealthBar(self, hp, Max)
+function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 	local bar = self.statsFrame.healthBar
 	bar:SetMinMaxValues(0, Max)
 	local percent
-	if hp >= 1 and Max == 0 then -- For some dumb reason max HP is 0, normal HP is not, so lets use normal HP as max
-		Max = hp
-		percent = 1
-	elseif hp == 0 and Max == 0 then -- Both are 0, so it's probably dead since usually current HP returns correctly when Max HP fails.
-		percent = 0
+	if not IsRetail then
+		if hp >= 1 and Max == 0 then -- For some dumb reason max HP is 0, normal HP is not, so lets use normal HP as max
+			Max = hp
+			percent = 1
+		elseif hp == 0 and Max == 0 then -- Both are 0, so it's probably dead since usually current HP returns correctly when Max HP fails.
+			percent = 0
+		else
+			percent = hp / Max
+		end
+		if percent > 1 then percent = 1 end -- percent only goes to 100
+		if (conf.bar.inverse) then
+			bar:SetValue(hpInverse)
+			bar.tex:SetTexCoord(0, max(0,(1 - percent)), 0, 1)
+		else
+			bar:SetValue(hp)
+			bar.tex:SetTexCoord(0, max(0, percent), 0, 1)
+		end
 	else
-		percent = hp / Max
-	end
-	if percent > 1 then percent = 1 end -- percent only goes to 100
-	if (conf.bar.inverse) then
-		bar:SetValue(Max - hp)
-		bar.tex:SetTexCoord(0, max(0,(1 - percent)), 0, 1)
-	else
-		bar:SetValue(hp)
-		bar.tex:SetTexCoord(0, max(0, percent), 0, 1)
+	 percent = UnitHealthPercent(partyid, false)
+		if (conf.bar.inverse) then
+			bar:SetValue( hpInverse)
+			bar.tex:SetTexCoord(0, hpInverse, 0, 1)
+		else
+			bar:SetValue(hp)
+			bar.tex:SetTexCoord(0, percent, 0, 1)
+		end
 	end
 
 	TPerl_ColourHealthBar(self, percent)
@@ -1531,7 +1542,7 @@ function TPerl_MinimapButton_Details(tt, ldb)
 			allAddonsCPU = allAddonsCPU + GetAddOnCPUUsage(i)
 		end
 
-		-- Show X-Perl memory usage
+		-- Show TPerl memory usage
 		UpdateAddOnMemoryUsage()
 		UpdateAddOnCPUUsage()
 		local totalKB, totalCPU, diffKB, diff = 0, 0, 0
@@ -3599,7 +3610,7 @@ FlashFrame:SetScript("OnUpdate", TPerl_FrameFlash_OnUpdate)
 function TPerl_FrameFlash(self)
 	if (not FlashFrame.list[self]) then
 		if (self.frameFlash) then
-			error("X-Perl ["..self:GetName()..".frameFlash is set with no entry in FlashFrame.list]")
+			error("TPerl ["..self:GetName()..".frameFlash is set with no entry in FlashFrame.list]")
 		end
 
 		--[[self.frameFlash = TPerl_GetReusableTable()
@@ -3758,17 +3769,26 @@ end
 function TPerl_Unit_GetHealth(self)
 	local partyid = self.partyid
 	local hp, hpMax = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid)), UnitHealthMax(partyid)
-
-	if (hp > hpMax) then
-		if (UnitIsGhost(partyid)) then
-			hp = 1
-		elseif UnitIsDead(partyid) then
-			hp = 0
-		else
-			hp = hpMax
+ if not IsRetail then
+		if (hp > hpMax) then
+			if (UnitIsGhost(partyid)) then
+				hp = 1
+			elseif UnitIsDead(partyid) then
+				hp = 0
+			else
+				hp = hpMax
+			end
 		end
+ else
+	 if (UnitIsGhost(partyid)) then
+				hp = 1
+			elseif UnitIsDead(partyid) then
+				hp = 0
+			else
+				hp = hpMax
+			end
 	end
-
+	
 	return hp or 0, hpMax or 1, (hpMax == 100)
 end
 

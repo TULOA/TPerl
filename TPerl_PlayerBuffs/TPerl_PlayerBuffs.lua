@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -109,7 +109,7 @@ function TPerl_Player_Buffs_Position(self)
 			end
 		end
 
-		if (pconf.buffs.above) and (not IsTBCAnni) then
+		if (pconf.buffs.above) then --and (not IsTBCAnni) then
 			self.debuffFrame:SetPoint("BOTTOMLEFT", self.buffFrame, "TOPLEFT", 0, 2)
 		else
 			self.debuffFrame:SetPoint("TOPLEFT", self.buffFrame, "BOTTOMLEFT", 0, -2)
@@ -119,7 +119,7 @@ function TPerl_Player_Buffs_Position(self)
 	end
 end
 
--- TPerl_Player_BuffSetup
+-- TPerl_Player_BuffSetup hideBlizzard
 function TPerl_Player_BuffSetup(self)
 	if (not self) then
 		return
@@ -189,12 +189,23 @@ function TPerl_Player_BuffSetup(self)
 	if (pconf.buffs.hideBlizzard) then
 		BuffFrame:UnregisterEvent("UNIT_AURA")
 		BuffFrame:Hide()
+		if IsTBCAnni then
+		 --Hide Debuffs. TODO: Check other editions for the possible presence of this.
+			--Unsure why they brought this back. It was not present even in Retail. And TBC was basically Retail but only TBC features.
+		 DebuffFrame:UnregisterEvent("UNIT_AURA")
+		 DebuffFrame:Hide()
+		end
 		if (not IsRetail) and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Hide()
 		end
 	else
 		BuffFrame:Show()
 		BuffFrame:RegisterEvent("UNIT_AURA")
+		if IsTBCAnni then
+		 --Hide Debuffs. TODO: Check other editions like classic classic if it exists.
+		 DebuffFrame:Show()
+		 DebuffFrame:RegisterEvent("UNIT_AURA")
+		end
 		if not IsRetail and (not IsTBCAnni) then
 			TemporaryEnchantFrame:Show()
 		end

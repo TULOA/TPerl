@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -45,7 +45,7 @@ local mod = CreateFrame("Frame", BackdropTemplateMixin and "BackdropTemplate")
 --mod:RegisterEvent("CHAT_MSG_ADDON")
 --mod:RegisterEvent("GROUP_ROSTER_UPDATE")
 
---RegisterAddonMessagePrefix("X-Perl")
+--RegisterAddonMessagePrefix("TPerl")
 
 local function modOnEvent(self, event, ...)
 	local f = mod[event]
@@ -81,7 +81,7 @@ function mod:TooltipInfo(tooltip, unitid)
 
 			if (xpUsage.addon) then
 				if xpUsage.addon == 0 then
-					xp = "|cFFD00000X-Perl|r "..(xpUsage.version or TPerl_VersionNumber)
+					xp = "|cFFD00000TPerl|r "..(xpUsage.version or TPerl_VersionNumber)
 				else
 					xp = "|cFFD00000TPerl|r "..(xpUsage.version or TPerl_VersionNumber)
 				end
@@ -179,7 +179,7 @@ function mod:ProcessTPerlMessage(sender, msg, channel)
 	elseif (msg == "S") then
 		if (channel == "WHISPER") then
 			-- Version only sent, so ask for rest
-			SendAddonMessage("X-Perl", "ASK", channel, sender)
+			SendAddonMessage("TPerl", "ASK", channel, sender)
 		end
 	elseif (msg == "ASK") then
 		if (channel == "WHISPER") then
@@ -216,7 +216,7 @@ function mod:GROUP_ROSTER_UPDATE()
 	if (UnitInParty("player")) then
 		if (not self.inParty and not self.inRaid) then
 			self.inParty = true
-			self:SendModules("PARTY") -- Let other X-Perl users know which version we're running
+			self:SendModules("PARTY") -- Let other TPerl users know which version we're running
 		end
 	else
 		self.inParty = nil
@@ -225,7 +225,7 @@ end
 
 -- CHAT_MSG_ADDON
 function mod:CHAT_MSG_ADDON(prefix, msg, channel, sender)
-	if (prefix == "X-Perl") then
+	if (prefix == "TPerl") then
 		self:ParseCTRA(sender, msg, channel)
 	end
 end
@@ -291,7 +291,7 @@ function mod:SendModules(chan, target)
 		end
 
 		local packet = self:MakePacket(chan == "WHISPER")
-		SendAddonMessage("X-Perl", packet, chan, target)
+		SendAddonMessage("TPerl", packet, chan, target)
 	end
 end
 
@@ -360,7 +360,7 @@ function TPerl_GetUsage(unitName, unitID)
 			end
 			if (not mod.directQueries[unitName]) then
 				mod.directQueries[unitName] = true
-				SendAddonMessage("X-Perl", mod:MakePacket(nil, true), "WHISPER", unitName)
+				SendAddonMessage("TPerl", mod:MakePacket(nil, true), "WHISPER", unitName)
 			end
 		end
 	end

@@ -1,10 +1,10 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
 if (GetLocale() == "itIT") then
-	TPerl_ProductName		= "|cFFD00000X-Perl|r UnitFrames"
-	TPerl_ShortProductName	= "|cFFD00000X-Perl|r"
+	TPerl_ProductName		= "|cFFD00000TPerl|r UnitFrames"
+	TPerl_ShortProductName	= "|cFFD00000TPerl|r"
 	TPerl_Author			= "|cFFFF8080Zek|r"
 	TPerl_Description		= TPerl_ProductName.." di "..TPerl_Author
 
@@ -16,8 +16,8 @@ if (GetLocale() == "itIT") then
 	TPERL_MINIMAP_HELP2		= "|c00FFFFFFClick Destro|r per spostare questa icona"
 	TPERL_MINIMAP_HELP3		= "\rMembri reali dell'incursione: |c00FFFF80%d|r\rMembri reali del gruppo: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4		= "\rSei il capogruppo/capoincursione reale"
-	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r per info sull'uso di memoria di X-Perl"
-	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Maiusc|r per l'uso di memoria di X-Perl dall'avvio"
+	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r per info sull'uso di memoria di TPerl"
+	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Maiusc|r per l'uso di memoria di TPerl dall'avvio"
 
 	TPERL_MINIMENU_OPTIONS	= "Opzioni"
 	TPERL_MINIMENU_ASSIST	= "Visualizza finestra assist"

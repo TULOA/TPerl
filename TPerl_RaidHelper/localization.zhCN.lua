@@ -1,5 +1,5 @@
 if (GetLocale() == "zhCN") then
-	TPERL_MSG_PREFIX	= "|c00C05050X-Perl|r "
+	TPERL_MSG_PREFIX	= "|c00C05050TPerl|r "
 
 	TPERL_TOOLTIP_ASSISTING	= "正在协助的玩家："
 	TPERL_TOOLTIP_HEALERS	= "以我为目标的治疗者："

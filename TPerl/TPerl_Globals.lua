@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -250,7 +250,7 @@ do
 		local name, title, notes, enabled = C_AddOns.GetAddOnInfo(modName)
 		if (name and enabled) then
 			DisableAddOn(modName)
-			local notice = "Disabled '"..modName.."' addon. It is not compatible or needed with X-Perl"
+			local notice = "Disabled '"..modName.."' addon. It is not compatible or needed with TPerl"
 			if (issues) then
 				notice = notice..", and creates display issues."
 			end
@@ -524,6 +524,7 @@ local function startupCheckSettings(self,event)
 end
 
 function TPerl_ForceImportAll()
+	--[[ --Disabled for not working.
 	if C_AddOns.IsAddOnLoaded("TPerl") then
 		if (TPerlConfig) then
 			TPerlConfig = TPerlConfig
@@ -540,8 +541,9 @@ function TPerl_ForceImportAll()
 		C_AddOns.DisableAddOn("ZPerl")
 		print("TPerl: Profile importing done, please reload you UI for the process to complete.")
 	else
-		print("X-Perl is not loaded. You must load it first, to access it's variables for the import.")
+		print("ZPerl is not loaded. You must load it first, to access it's variables for the import.")
 	end
+	]]--
 end
 
 -- TPerl_GetLayout

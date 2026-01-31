@@ -1,7 +1,7 @@
 if (GetLocale() == "koKR") then
 TPERL_ADMIN_TITLE	= TPerl_ShortProductName.." 공격대 관리자"
 
-TPERL_MSG_PREFIX	= "|c00C05050X-Perl|r "
+TPERL_MSG_PREFIX	= "|c00C05050TPerl|r "
 
 -- Raid Admin
 TPERL_BUTTON_ADMIN_PIN		= "창 고정"

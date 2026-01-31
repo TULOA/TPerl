@@ -1,10 +1,10 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 --Russian localization file translated by StingerSoft
 if (GetLocale() == "ruRU") then
 
-	TPerl_ProductName	    = "|cFFD00000X-Perl|r Фреймы Игроков"
+	TPerl_ProductName	    = "|cFFD00000TPerl|r Фреймы Игроков"
 	TPerl_Description	    = TPerl_ProductName.." от "..TPerl_Author
 	TPerl_Version		    = TPerl_Description.." - "..TPerl_VersionNumber
 	TPERL_LongDescription	= "Фреймы Игроков заменяются на новый вид Игроков, Питомцев, Группы, Цели, Целей Цели, Фокуса, Рейда"
@@ -13,8 +13,8 @@ if (GetLocale() == "ruRU") then
 	TPERL_MINIMAP_HELP2		= "|c00FFFFFFПравый клик|r - перемещение иконки"
 	TPERL_MINIMAP_HELP3		= "\rУчастники рейда: |c00FFFF80%d|r\rУчастники рейда: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4		= "\rВы лидер группы/рейда"
-	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r для просмотра потребления памяти X-Perl'ом"
-	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Shift|r для просмотра потребления памяти X-Perl'ом после запуска"
+	TPERL_MINIMAP_HELP5		= "|c00FFFFFFAlt|r для просмотра потребления памяти TPerl'ом"
+	TPERL_MINIMAP_HELP6		= "|c00FFFFFF+Shift|r для просмотра потребления памяти TPerl'ом после запуска"
 
 	TPERL_MINIMENU_OPTIONS		= "Опции"
 	TPERL_MINIMENU_ASSIST		= "Показ Фрейма Поддержки"

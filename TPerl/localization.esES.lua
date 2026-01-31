@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -11,8 +11,8 @@ if (GetLocale() == "esES" or GetLocale() == "esMX") then
 	TPERL_MINIMAP_HELP2 = "|c00FFFFFFClick derecho|r para mover este icono"
 	TPERL_MINIMAP_HELP3 = "\rMiembros de la Banda: |c00FFFF80%d|r\rMiembros del Grupo: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4 = "\rEres el lider del grupo/raid"
-	TPERL_MINIMAP_HELP5 = "|c00FFFFFFAlt|r para ver el uso de memoria de X-Perl"
-	TPERL_MINIMAP_HELP6 = "|c00FFFFFF+Shift|r para ver el uso de memoria de X-Perl desde el inicio"
+	TPERL_MINIMAP_HELP5 = "|c00FFFFFFAlt|r para ver el uso de memoria de TPerl"
+	TPERL_MINIMAP_HELP6 = "|c00FFFFFF+Shift|r para ver el uso de memoria de TPerl desde el inicio"
 
 	TPERL_MINIMENU_OPTIONS	= "Opciones"
 	TPERL_MINIMENU_ASSIST	= "Mostrar el Asistente de Marco"

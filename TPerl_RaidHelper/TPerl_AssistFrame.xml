@@ -194,7 +194,7 @@
 		</Scripts>
 	</Frame>
 
-	<!-- These two frames add to X-Perl UnitFrames. If X-Perl not loaded, then WoW will just ignore these without error -->
+	<!-- These two frames add to TPerl UnitFrames. If TPerl not loaded, then WoW will just ignore these without error -->
 	<Button name="TPerl_Player_TargettingFrame" inherits="TPerlBackdropTemplate" enableMouse="true" text="0" hidden="true">
 		<KeyValues>
 			<KeyValue key="backdropInfo" value="TPerl_Frame_Backdrop_32_16_3333" type="global"/>

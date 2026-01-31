@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -1628,7 +1628,7 @@ end
 function TPerl_Check_Report(showNames)
 	local function ReportOutput(msg)
 		if (msg) then
-			SendChatMessage("<X-Perl> "..msg, outputChannel, nil, outputChannelIndex)
+			SendChatMessage("<TPerl> "..msg, outputChannel, nil, outputChannelIndex)
 		end
 	end
 
@@ -1811,7 +1811,7 @@ function TPerl_Check_Report(showNames)
 
 								if (strlen(msg) + strlen(name) > 240) then
 									ReportOutput(msg.."...")
-									DEFAULT_CHAT_FRAME:AddMessage("<X-Perl> "..msgLocal)
+									DEFAULT_CHAT_FRAME:AddMessage("<TPerl> "..msgLocal)
 									msg = "  ... "..v.name
 									msgLocal = "  ... "..name
 								else
@@ -1830,10 +1830,10 @@ function TPerl_Check_Report(showNames)
 								ReportOutput(msg)
 							end
 							if (msgLocal) then
-								DEFAULT_CHAT_FRAME:AddMessage("<X-Perl> "..msgLocal)
+								DEFAULT_CHAT_FRAME:AddMessage("<TPerl> "..msgLocal)
 							end
 						elseif (showTitle) then
-							DEFAULT_CHAT_FRAME:AddMessage("<X-Perl> "..showTitle..NONE)
+							DEFAULT_CHAT_FRAME:AddMessage("<TPerl> "..showTitle..NONE)
 						end
 					else
 						msg = link.." "

@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -7,8 +7,8 @@ if (GetLocale() == "koKR") then
 	TPERL_MINIMAP_HELP2	= "|c00FFFFFF우클릭|r 으로 버튼을 드래그해서 이동가능합니다."
 	TPERL_MINIMAP_HELP3	= "\r실제 공대원: |c00FFFF80%d|r\r실제 파티원: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4	= "\r당신은 실제 파티/공격대장 입니다."
-	TPERL_MINIMAP_HELP5	= "|c00FFFFFFALT|r : X-Perl 메모리 사용량"
-	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+SHIFT|r : 접속 후 X-Perl 메모리 사용량"
+	TPERL_MINIMAP_HELP5	= "|c00FFFFFFALT|r : TPerl 메모리 사용량"
+	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+SHIFT|r : 접속 후 TPerl 메모리 사용량"
 
 	TPERL_MINIMENU_OPTIONS	= "설정"
 	TPERL_MINIMENU_ASSIST	= "어시스트 창 표시"

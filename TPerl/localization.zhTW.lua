@@ -1,11 +1,11 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
 -- Thanks 星塵、Player Lin for translations
 
 if (GetLocale() == "zhTW") then
-	TPerl_ProductName	= "|cFFD00000X-Perl|r 單位框架"
+	TPerl_ProductName	= "|cFFD00000TPerl|r 單位框架"
 	TPerl_Description	= TPerl_ProductName.." 作者 "..TPerl_Author
 
 	TPerl_LongDescription	= "全新外觀的玩家單位狀態框架模組，包括玩家、寵物、隊伍、專注(focus)、團隊、目標以及目標的目標等。"
@@ -14,8 +14,8 @@ if (GetLocale() == "zhTW") then
 	TPERL_MINIMAP_HELP2	= "|c00FFFFFF右鍵拖動|r 移動此圖標"
 	TPERL_MINIMAP_HELP3	= "\r團隊成員: |c00FFFF80%d|r\r隊伍成員: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4	= "\r你是此 隊伍/團隊 的隊長"
-	TPERL_MINIMAP_HELP5	= "|c00FFFFFFAlt|r 顯示 X-Perl 記憶體用量"
-	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+Shift|r 顯示 X-Perl 記憶體使用明細"
+	TPERL_MINIMAP_HELP5	= "|c00FFFFFFAlt|r 顯示 TPerl 記憶體用量"
+	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+Shift|r 顯示 TPerl 記憶體使用明細"
 
 	TPERL_MINIMENU_OPTIONS	= "功能設定"
 	TPERL_MINIMENU_ASSIST	= "顯示協助框架"

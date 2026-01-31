@@ -4,9 +4,9 @@
 ]]
 
 if (GetLocale() == "esES") or (GetLocale() == "esMX") then
-TPERL_ADMIN_TITLE	= "X-Perl Administración de banda"
+TPERL_ADMIN_TITLE	= "TPerl Administración de banda"
 
-TPERL_MSG_PREFIX	= "|c00C05050X-Perl|r "
+TPERL_MSG_PREFIX	= "|c00C05050TPerl|r "
 
 -- Raid Admin
 TPERL_BUTTON_ADMIN_PIN		= "Clavar ventana"
@@ -28,7 +28,7 @@ TPERL_NO_ROSTER_NAME_GIVEN	= "No se ha dado nombre para la plantilla"
 TPERL_NO_ROSTER_CALLED		= "No hay ninguna plantilla guardad con el nombre '%s'"
 
 -- Item Checker
-TPERL_CHECK_TITLE		= "X-Perl Comprobador de objetos"
+TPERL_CHECK_TITLE		= "TPerl Comprobador de objetos"
 
 TPERL_CHECK_NAME		= "Nombre"
 

@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -9,8 +9,8 @@ if (GetLocale() == "zhCN") then
 	TPERL_MINIMAP_HELP2	= "|c00FFFFFF右键点击|r拖动图标"
 	TPERL_MINIMAP_HELP3	= "\r团队成员: |c00FFFF80%d|r\r小队成员: |c00FFFF80%d|r"
 	TPERL_MINIMAP_HELP4	= "\r你是此 队伍/团队 队长"
-	TPERL_MINIMAP_HELP5	= "|c00FFFFFFAlt|r  X-Perl 内存占用"
-	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+Shift|r  X-Perl 启用以来的内存占用"
+	TPERL_MINIMAP_HELP5	= "|c00FFFFFFAlt|r  TPerl 内存占用"
+	TPERL_MINIMAP_HELP6	= "|c00FFFFFF+Shift|r  TPerl 启用以来的内存占用"
 
 	TPERL_MINIMENU_OPTIONS	= "选项"
 	TPERL_MINIMENU_ASSIST	= "显示助手窗口"

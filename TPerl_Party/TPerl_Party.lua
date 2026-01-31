@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -139,7 +139,7 @@ function TPerl_Party_Events_OnLoad(self)
 
 	UIParent:UnregisterEvent("GROUP_ROSTER_UPDATE") -- IMPORTANT! Stops raid framerate lagging when members join/leave/zone
 
-	if IsRetail and IsTBCAnni then
+	if IsRetail or IsTBCAnni then
 		TPerl_BlizzFrameDisable(PartyFrame)
 	else
 		for i = 1, 4 do

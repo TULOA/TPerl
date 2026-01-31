@@ -1,4 +1,4 @@
--- X-Perl UnitFrames
+-- TPerl UnitFrames
 -- Author: TULOA
 -- License: GNU GPL v3, 29 June 2007 (see LICENSE.txt)
 
@@ -838,14 +838,24 @@ local function TPerl_Player_UpdateHealth(self)
 	local sf = self.statsFrame
 	local hb = sf.healthBar
 	local playerhealth, playerhealthmax = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid)), UnitHealthMax(partyid)
+ if IsRetail then
+	 -- Only blizz can return the inverse since no math on hp values.
+		local playerInverseHp = UnitHealthPercent(partyid, false, CurveConstants.Reverse)
+	else
+	 local playerInverseHp = 0 -- Not used in anything but retail.
+	end
 
 	self.afk = UnitIsAFK(partyid) and conf.showAFK == 1
 
-	TPerl_SetHealthBar(self, playerhealth, playerhealthmax)
-	TPerl_Player_UpdateAbsorbPrediction(self)
-	TPerl_Player_UpdateHotsPrediction(self)
-	TPerl_Player_UpdateHealPrediction(self)
-	TPerl_Player_UpdateResurrectionStatus(self)
+	TPerl_SetHealthBar(self, playerhealth, playerhealthmax, playerInverseHp)
+	if not IsRetail then
+		--Not implemented in retail yet.
+		--FLAG: IMPLEMENTME
+		TPerl_Player_UpdateAbsorbPrediction(self)
+		TPerl_Player_UpdateHotsPrediction(self)
+		TPerl_Player_UpdateHealPrediction(self)
+		TPerl_Player_UpdateResurrectionStatus(self)
+	end
 
 	local greyMsg
 	if (UnitIsDead(partyid)) then

@@ -6,7 +6,7 @@ HoT Monitor will highlight units clearly that have your own active Heal over Tim
 
 Debuff Highlights in standard debuff colours on all friendly frames. Priority given to show debuffs that YOU can cure first.
 
-Raid Frames, buff icons, MT list units and some other portions or X-Perl are Created on demand. Saving a lot of time and memory at system startup. Defering the creation of many parts of X-Perl to when they are actually required. And of course, most often outside of raids they are never required and are never created.
+Raid Frames, buff icons, MT list units and some other portions or TPerl are Created on demand. Saving a lot of time and memory at system startup. Defering the creation of many parts of TPerl to when they are actually required. And of course, most often outside of raids they are never required and are never created.
 
 Raid Target icon support for Target, Target's Target, MT Targets.
 
@@ -18,15 +18,15 @@ Raid tooltip will show combat rezzers available (druids with Rebirth ready (or v
 
 Red and Green combat flashes for frames when player, pet, target, party, partypets, raid take damage/heals. Useful indication of things happening.
 
-Added time left on party member/target buffs/debuffs when in a raid, these depend somewhat on CTRA sending appropriate information over the addon channel, although some of it can be determined at run time by X-Perl, when a player gets a buff for example, we know how long it should last, and therefor when it should expire.
+Added time left on party member/target buffs/debuffs when in a raid, these depend somewhat on CTRA sending appropriate information over the addon channel, although some of it can be determined at run time by TPerl, when a player gets a buff for example, we know how long it should last, and therefor when it should expire.
 
-Totally new options window including all X-Perl options and access via minimap icon.
+Totally new options window including all TPerl options and access via minimap icon.
 
 Configurable colours for borders and backgrounds. Including class coloured names, and configurable reaction colours.
 
-Much care has been taken with code size, memory load, memory usage per cycle and so on. LuaProfiler/OnEvent mods used extensively and regularly to ensure that X-Perl does not do more work than is absolutely necessary.
+Much care has been taken with code size, memory load, memory usage per cycle and so on. LuaProfiler/OnEvent mods used extensively and regularly to ensure that TPerl does not do more work than is absolutely necessary.
 
-With that in mind, the event system was totally re-written, and is as kind to system performance as possible. The majority of events are disabled while zoning to alleviate any event backlog issues. And where most addons use 1 event handler per unit frame, which although standard, the alternative has improved X-Perl's performance. By using single main event handlers, we can route the events to appropriate units. So, for example, when a single UNIT_HEALTH update is fired, then just a single raid frame or party frame etc. gets the event, rather than 40 raid frame's handlers, 4 party and so on. Nymbia's Perl used to do a lot of crazy full frame udpates all over the place, eating away at CPU cycles. This was all fixed to only update what was necessary based on events.
+With that in mind, the event system was totally re-written, and is as kind to system performance as possible. The majority of events are disabled while zoning to alleviate any event backlog issues. And where most addons use 1 event handler per unit frame, which although standard, the alternative has improved TPerl's performance. By using single main event handlers, we can route the events to appropriate units. So, for example, when a single UNIT_HEALTH update is fired, then just a single raid frame or party frame etc. gets the event, rather than 40 raid frame's handlers, 4 party and so on. Nymbia's Perl used to do a lot of crazy full frame udpates all over the place, eating away at CPU cycles. This was all fixed to only update what was necessary based on events.
 
 TPerl_RaidHelper sub-addon
 -------------------------
@@ -49,7 +49,7 @@ You can click on casters or their targets as expected.
 For druids, right clicking on a caster will cast Innervate on them.
 For shamans, right clicking on a caster will cast Mana Tide Totem. Check the * indicator to see if they're in your group.
 
-All bars can be re-sized in X-Perl main options (Monitor section).
+All bars can be re-sized in TPerl main options (Monitor section).
 
 Totals can be toggled (from the 'T' minibutton at top of frame) which gives overview of raid mana status.
 
@@ -87,7 +87,7 @@ Clique compatible. And any other click cast addon that uses the same communicati
 
 Notes for other mod authors
 ---------------------------
-The ClickCastFrames table (as used by Clique) is maintained by all X-Perl's unit frames.
+The ClickCastFrames table (as used by Clique) is maintained by all TPerl's unit frames.
 
 Defined as:
 
@@ -129,5 +129,5 @@ While every care is taken to ensure there are few or no bugs, it is always possi
 
 --
 TPerl UnitFrames by TULOA - Atiesh (Mists Classic)
-X-Perl UnitFrames by Zek <Blood Cult> - Bloodhoof-EU
+TPerl UnitFrames by Zek <Blood Cult> - Bloodhoof-EU
 Z-Perl UnitFrames by Resike
