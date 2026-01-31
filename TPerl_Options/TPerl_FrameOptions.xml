@@ -1226,7 +1226,7 @@
 	<!-- Font Button Selector Template -->
 	<Button name="TPerl_Options_FontButtonSelector" virtual="true">
 		<Size>
-			<AbsDimension x="170" y="18"/>
+			<AbsDimension x="170" y="15"/>
 		</Size>
 		<Scripts>
 			<OnLoad>
@@ -1274,6 +1274,7 @@
 
 				self.scrollBar.bar:SetValue(max(0, min(self.Selection - 5, self.list and #self.list - 8 or 0)))
 				self:SetFontPreviews()
+				self:Setup()
 
 				TPerl_Options_Mask:Show()
 			</OnShow>
@@ -1289,7 +1290,7 @@
 			</OnMouseWheel>
 		</Scripts>
 		<Size>
-			<AbsDimension x="215" y="280"/>
+			<AbsDimension x="215" y="260"/>
 		</Size>
 		<Frames>
 			<Button name="$parent0" inherits="TPerl_Options_FontButtonSelector" id="0">
@@ -3419,10 +3420,13 @@
 					</Button>
 
 					<!-- Font Selection Button -->
-					<Button name="$parent_FontSelect" inherits="TPerlColorPickerTemplate">
+					<Button name="$parent_FontSelect">
 						<Size>
-							<AbsDimension x="100" y="10"/>
+							<AbsDimension x="100" y="14"/>
 						</Size>
+						<HitRectInsets>
+							<AbsInset left="0" right="-80" top="0" bottom="0"/>
+						</HitRectInsets>
 						<Anchors>
 							<Anchor point="TOPLEFT" relativeTo="$parent_BarTextures" relativePoint="BOTTOMLEFT">
 								<Offset>
@@ -3431,13 +3435,17 @@
 							</Anchor>
 						</Anchors>
 						<Layers>
-							<Layer level="OVERLAY">
+							<Layer level="ARTWORK">
+								<FontString name="$parentText" inherits="GameFontNormalSmall" text="Font">
+									<Anchors>
+										<Anchor point="LEFT"/>
+									</Anchors>
+								</FontString>
 								<FontString name="$parentName" inherits="GameFontNormalSmall">
 									<Anchors>
-										<Anchor point="TOPLEFT"/>
-										<Anchor point="BOTTOMRIGHT">
+										<Anchor point="LEFT" relativePoint="RIGHT" relativeTo="$parentText">
 											<Offset>
-												<AbsDimension x="0" y="1"/>
+												<AbsDimension x="8" y="0"/>
 											</Offset>
 										</Anchor>
 									</Anchors>
@@ -3447,12 +3455,11 @@
 						</Layers>
 						<Scripts>
 							<OnLoad>
-								TPerl_OptionsSetMyText(self, "TPERL_CONF_FONT")
+								self.tooltipText = TPERL_CONF_FONT_DESC
 							</OnLoad>
 							<OnShow>
 								if (TPerlDB.font and TPerlDB.font.name) then
 									_G[self:GetName().."Name"]:SetText(TPerlDB.font.name)
-									-- Preview the font in the button
 									local fontPath = TPerl_GetFont()
 									_G[self:GetName().."Name"]:SetFont(fontPath, 10, "")
 								end
@@ -3460,6 +3467,19 @@
 							<OnClick>
 								TPerl_Options_FontSelect:Show()
 							</OnClick>
+							<OnEnter>
+								if self.tooltipText then
+									GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+									GameTooltip:SetText("Font", 1, 1, 1)
+									GameTooltip:AddLine(self.tooltipText, nil, nil, nil, 1)
+									GameTooltip:Show()
+								end
+								_G[self:GetName().."Text"]:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+							</OnEnter>
+							<OnLeave>
+								_G[self:GetName().."Text"]:SetTextColor(NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+								GameTooltip:Hide()
+							</OnLeave>
 						</Scripts>
 						<HighlightTexture file="Interface\Addons\TPerl\Images\TPerl_Highlight" alphaMode="ADD">
 							<TexCoords left="0" right="1" top="0.5" bottom="1"/>
@@ -3474,7 +3494,7 @@
 						<Anchors>
 							<Anchor point="TOPLEFT" relativeTo="$parent_FontSelect" relativePoint="BOTTOMLEFT">
 								<Offset>
-									<AbsDimension x="0" y="-6"/>
+									<AbsDimension x="0" y="-14"/>
 								</Offset>
 							</Anchor>
 						</Anchors>
