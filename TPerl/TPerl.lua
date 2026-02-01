@@ -801,11 +801,77 @@ function TPerl_GetFontScale()
 	return (conf and conf.font and conf.font.scale) or 1.0
 end
 
+-- TPerl_GetHealthTextSize
+function TPerl_GetHealthTextSize()
+	return (conf and conf.font and conf.font.healthSize) or 9
+end
+
+-- TPerl_GetManaTextSize
+function TPerl_GetManaTextSize()
+	return (conf and conf.font and conf.font.manaSize) or 9
+end
+
+-- TPerl_GetRepTextSize
+function TPerl_GetRepTextSize()
+	return (conf and conf.font and conf.font.repSize) or 9
+end
+
+-- TPerl_GetXPTextSize
+function TPerl_GetXPTextSize()
+	return (conf and conf.font and conf.font.xpSize) or 9
+end
+
 -- TPerl_StatsFrame_Setup
 function TPerl_StatsFrame_Setup(self)
 	self:OnBackdropLoaded()
 	TPerl_SetChildMembers(self)
 	self.SetGrey = TPerl_StatsFrame_SetGrey
+end
+
+-- TPerl_ApplyBarTextSizes
+-- Call this to apply base text sizes to a stats frame
+function TPerl_ApplyBarTextSizes(statsFrame)
+	if not statsFrame then return end
+
+	local fontPath = TPerl_GetFont and TPerl_GetFont()
+	local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+	if not fontPath then return end
+
+	-- Health bar text
+	if statsFrame.healthBar and statsFrame.healthBar.text then
+		local hbText = statsFrame.healthBar.text
+		local _, _, flags = hbText:GetFont()
+		local baseSize = TPerl_GetHealthTextSize()
+		hbText.TPerlBaseSize = baseSize
+		hbText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- Mana bar text
+	if statsFrame.manaBar and statsFrame.manaBar.text then
+		local mbText = statsFrame.manaBar.text
+		local _, _, flags = mbText:GetFont()
+		local baseSize = TPerl_GetManaTextSize()
+		mbText.TPerlBaseSize = baseSize
+		mbText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- XP bar text
+	if statsFrame.xpBar and statsFrame.xpBar.text then
+		local xpText = statsFrame.xpBar.text
+		local _, _, flags = xpText:GetFont()
+		local baseSize = TPerl_GetXPTextSize()
+		xpText.TPerlBaseSize = baseSize
+		xpText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- Rep bar text
+	if statsFrame.repBar and statsFrame.repBar.text then
+		local repText = statsFrame.repBar.text
+		local _, _, flags = repText:GetFont()
+		local baseSize = TPerl_GetRepTextSize()
+		repText.TPerlBaseSize = baseSize
+		repText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
 end
 
 -- TPerl_GetClassColour

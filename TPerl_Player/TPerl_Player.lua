@@ -594,17 +594,14 @@ local function TPerl_Player_UpdateXP(self)
 				xpBar.percent:SetFormattedText(percD, xpPercent)
 			end
 
-			-- Apply custom font to percent
+			-- Apply custom font to percent using config-based size
 			local fontPath = TPerl_GetFont and TPerl_GetFont()
 			local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
 			if fontPath then
-				local _, size, flags = xpBar.percent:GetFont()
-				if size then
-					if not xpBar.percent.TPerlBaseSize then
-						xpBar.percent.TPerlBaseSize = size
-					end
-					xpBar.percent:SetFont(fontPath, xpBar.percent.TPerlBaseSize * fontScale, flags)
-				end
+				local _, _, flags = xpBar.percent:GetFont()
+				local xpSize = TPerl_GetXPTextSize and TPerl_GetXPTextSize() or 9
+				xpBar.percent.TPerlBaseSize = xpSize
+				xpBar.percent:SetFont(fontPath, xpSize * fontScale, flags or "")
 			end
 		end
 	end
@@ -714,6 +711,22 @@ function TPerl_Player_DruidBarUpdate(self)
 		if (MakeDruidBar) then
 			MakeDruidBar(self)
 			druidBar = self.statsFrame.druidBar
+			-- Apply font settings to newly created druid bar (uses mana size)
+			if druidBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local manaSize = TPerl_GetManaTextSize and TPerl_GetManaTextSize() or 9
+				if fontPath and druidBar.text then
+					local _, _, flags = druidBar.text:GetFont()
+					druidBar.text.TPerlBaseSize = manaSize
+					druidBar.text:SetFont(fontPath, manaSize * fontScale, flags or "")
+				end
+				if fontPath and druidBar.percent then
+					local _, _, flags = druidBar.percent:GetFont()
+					druidBar.percent.TPerlBaseSize = manaSize
+					druidBar.percent:SetFont(fontPath, manaSize * fontScale, flags or "")
+				end
+			end
 		end
 	end
 
@@ -2147,6 +2160,22 @@ function TPerl_Player_Set_Bits(self)
 	if (pconf.repBar) then
 		if (not self.statsFrame.repBar) then
 			CreateBar(self, "repBar")
+			-- Apply font settings to newly created rep bar
+			if self.statsFrame.repBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local repSize = TPerl_GetRepTextSize and TPerl_GetRepTextSize() or 9
+				if fontPath and self.statsFrame.repBar.text then
+					local _, _, flags = self.statsFrame.repBar.text:GetFont()
+					self.statsFrame.repBar.text.TPerlBaseSize = repSize
+					self.statsFrame.repBar.text:SetFont(fontPath, repSize * fontScale, flags or "")
+				end
+				if fontPath and self.statsFrame.repBar.percent then
+					local _, _, flags = self.statsFrame.repBar.percent:GetFont()
+					self.statsFrame.repBar.percent.TPerlBaseSize = repSize
+					self.statsFrame.repBar.percent:SetFont(fontPath, repSize * fontScale, flags or "")
+				end
+			end
 		end
 
 		self.statsFrame.repBar:Show()
@@ -2159,6 +2188,22 @@ function TPerl_Player_Set_Bits(self)
 	if (pconf.xpBar) then
 		if (not self.statsFrame.xpBar) then
 			MakeXPBar(self)
+			-- Apply font settings to newly created XP bar
+			if self.statsFrame.xpBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local xpSize = TPerl_GetXPTextSize and TPerl_GetXPTextSize() or 9
+				if fontPath and self.statsFrame.xpBar.text then
+					local _, _, flags = self.statsFrame.xpBar.text:GetFont()
+					self.statsFrame.xpBar.text.TPerlBaseSize = xpSize
+					self.statsFrame.xpBar.text:SetFont(fontPath, xpSize * fontScale, flags or "")
+				end
+				if fontPath and self.statsFrame.xpBar.percent then
+					local _, _, flags = self.statsFrame.xpBar.percent:GetFont()
+					self.statsFrame.xpBar.percent.TPerlBaseSize = xpSize
+					self.statsFrame.xpBar.percent:SetFont(fontPath, xpSize * fontScale, flags or "")
+				end
+			end
 		end
 
 		self.statsFrame.xpBar:Show()

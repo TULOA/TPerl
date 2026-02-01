@@ -870,51 +870,74 @@ function TPerl_SetFonts()
 	local function SetFontOnElement(element, baseSize)
 		if element and element.GetFont then
 			local _, _, flags = element:GetFont()
+			element.TPerlBaseSize = baseSize  -- Store base size to prevent double scaling
 			element:SetFont(fontPath, baseSize * scale, flags or "")
 		end
 	end
 
-	-- Apply to player XP, Rep, and Druid bars by global frame name (base size 10 - GameFontNormalSmall)
-	local playerBarNames = {
-		"TPerl_PlayerstatsFramexpBar",
-		"TPerl_PlayerstatsFramerepBar",
-		"TPerl_PlayerstatsFramedruidBar",
-	}
-	for _, barName in pairs(playerBarNames) do
-		local bar = _G[barName]
-		if bar then
-			SetFontOnElement(_G[barName.."text"], 10)
-			SetFontOnElement(_G[barName.."percent"], 10)
-		end
+	-- Get base sizes from config
+	local healthSize = TPerl_GetHealthTextSize()
+	local manaSize = TPerl_GetManaTextSize()
+	local xpSize = TPerl_GetXPTextSize()
+	local repSize = TPerl_GetRepTextSize()
+
+	-- Apply to player XP bar
+	local xpBar = _G["TPerl_PlayerstatsFramexpBar"]
+	if xpBar then
+		SetFontOnElement(_G["TPerl_PlayerstatsFramexpBartext"], xpSize)
+		SetFontOnElement(_G["TPerl_PlayerstatsFramexpBarpercent"], xpSize)
 	end
+
+	-- Apply to player Rep bar
+	local repBar = _G["TPerl_PlayerstatsFramerepBar"]
+	if repBar then
+		SetFontOnElement(_G["TPerl_PlayerstatsFramerepBartext"], repSize)
+		SetFontOnElement(_G["TPerl_PlayerstatsFramerepBarpercent"], repSize)
+	end
+
+	-- Apply to player Druid bar (uses mana size)
+	local druidBar = _G["TPerl_PlayerstatsFramedruidBar"]
+	if druidBar then
+		SetFontOnElement(_G["TPerl_PlayerstatsFramedruidBartext"], manaSize)
+		SetFontOnElement(_G["TPerl_PlayerstatsFramedruidBarpercent"], manaSize)
+	end
+
 	-- Also try via statsFrame reference
 	if TPerl_Player and TPerl_Player.statsFrame then
-		local bars = {TPerl_Player.statsFrame.xpBar, TPerl_Player.statsFrame.repBar, TPerl_Player.statsFrame.druidBar}
-		for _, bar in pairs(bars) do
-			if bar then
-				SetFontOnElement(bar.text, 10)
-				SetFontOnElement(bar.percent, 10)
-			end
+		if TPerl_Player.statsFrame.xpBar then
+			SetFontOnElement(TPerl_Player.statsFrame.xpBar.text, xpSize)
+			SetFontOnElement(TPerl_Player.statsFrame.xpBar.percent, xpSize)
+		end
+		if TPerl_Player.statsFrame.repBar then
+			SetFontOnElement(TPerl_Player.statsFrame.repBar.text, repSize)
+			SetFontOnElement(TPerl_Player.statsFrame.repBar.percent, repSize)
+		end
+		if TPerl_Player.statsFrame.druidBar then
+			SetFontOnElement(TPerl_Player.statsFrame.druidBar.text, manaSize)
+			SetFontOnElement(TPerl_Player.statsFrame.druidBar.percent, manaSize)
 		end
 	end
 
-	-- Apply to health/mana bar text on all stats frames (base size 10 - GameFontNormalSmall)
+	-- Apply to health/mana bar text on all stats frames
 	local statsFrames = {
 		TPerl_Player and TPerl_Player.statsFrame,
 		TPerl_Target and TPerl_Target.statsFrame,
 		TPerl_Player_Pet and TPerl_Player_Pet.statsFrame,
 		TPerl_Focus and TPerl_Focus.statsFrame,
 		TPerl_TargetTarget and TPerl_TargetTarget.statsFrame,
+		TPerl_FocusTarget and TPerl_FocusTarget.statsFrame,
+		TPerl_TargetTargetTarget and TPerl_TargetTargetTarget.statsFrame,
+		TPerl_PetTarget and TPerl_PetTarget.statsFrame,
 	}
 	for _, sf in pairs(statsFrames) do
 		if sf then
 			if sf.healthBar then
-				SetFontOnElement(sf.healthBar.text, 10)
-				SetFontOnElement(sf.healthBar.percent, 10)
+				SetFontOnElement(sf.healthBar.text, healthSize)
+				SetFontOnElement(sf.healthBar.percent, healthSize)
 			end
 			if sf.manaBar then
-				SetFontOnElement(sf.manaBar.text, 10)
-				SetFontOnElement(sf.manaBar.percent, 10)
+				SetFontOnElement(sf.manaBar.text, manaSize)
+				SetFontOnElement(sf.manaBar.percent, manaSize)
 			end
 		end
 	end
@@ -924,12 +947,27 @@ function TPerl_SetFonts()
 		local partyFrame = _G["TPerl_party"..i]
 		if partyFrame and partyFrame.statsFrame then
 			if partyFrame.statsFrame.healthBar then
-				SetFontOnElement(partyFrame.statsFrame.healthBar.text, 10)
-				SetFontOnElement(partyFrame.statsFrame.healthBar.percent, 10)
+				SetFontOnElement(partyFrame.statsFrame.healthBar.text, healthSize)
+				SetFontOnElement(partyFrame.statsFrame.healthBar.percent, healthSize)
 			end
 			if partyFrame.statsFrame.manaBar then
-				SetFontOnElement(partyFrame.statsFrame.manaBar.text, 10)
-				SetFontOnElement(partyFrame.statsFrame.manaBar.percent, 10)
+				SetFontOnElement(partyFrame.statsFrame.manaBar.text, manaSize)
+				SetFontOnElement(partyFrame.statsFrame.manaBar.percent, manaSize)
+			end
+		end
+	end
+
+	-- Apply to party pet frames
+	for i = 1, 4 do
+		local partyPetFrame = _G["TPerl_partypet"..i]
+		if partyPetFrame and partyPetFrame.statsFrame then
+			if partyPetFrame.statsFrame.healthBar then
+				SetFontOnElement(partyPetFrame.statsFrame.healthBar.text, healthSize)
+				SetFontOnElement(partyPetFrame.statsFrame.healthBar.percent, healthSize)
+			end
+			if partyPetFrame.statsFrame.manaBar then
+				SetFontOnElement(partyPetFrame.statsFrame.manaBar.text, manaSize)
+				SetFontOnElement(partyPetFrame.statsFrame.manaBar.percent, manaSize)
 			end
 		end
 	end
