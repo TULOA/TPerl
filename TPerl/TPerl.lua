@@ -748,11 +748,130 @@ function TPerl_GetBarTexture()
 	return (conf and conf.bar and conf.bar.texture and conf.bar.texture[2]) or "Interface\\TargetingFrame\\UI-StatusBar"
 end
 
+-- Font management (parallel to bar texture system)
+do
+	local fontShortlist
+	local fontList
+	local fontMedia
+
+	-- TPerl_RegisterSMFonts
+	function TPerl_RegisterSMFonts()
+		if (LibStub) then
+			fontMedia = LibStub("LibSharedMedia-3.0", true)
+		end
+
+		-- Built-in WoW fonts
+		fontShortlist = {
+			{"Friz Quadrata TT", "Fonts\\FRIZQT__.TTF"},
+			{"Arial Narrow", "Fonts\\ARIALN.TTF"},
+			{"Morpheus", "Fonts\\MORPHEUS.TTF"},
+			{"Skurri", "Fonts\\SKURRI.TTF"},
+		}
+	end
+
+	-- TPerl_AllFonts
+	function TPerl_AllFonts(short)
+		if (not fontList) then
+			if (short) then
+				return fontShortlist
+			end
+
+			if (fontMedia) then
+				fontList = { }
+				local smFonts = fontMedia:List("font")
+				for k, v in pairs(smFonts) do
+					tinsert(fontList, {v, fontMedia:Fetch("font", v)})
+				end
+			else
+				fontList = fontShortlist
+			end
+		end
+
+		return fontList
+	end
+end
+
+-- TPerl_GetFont
+function TPerl_GetFont()
+	return (conf and conf.font and conf.font.path) or "Fonts\\FRIZQT__.TTF"
+end
+
+-- TPerl_GetFontScale
+function TPerl_GetFontScale()
+	return (conf and conf.font and conf.font.scale) or 1.0
+end
+
+-- TPerl_GetHealthTextSize
+function TPerl_GetHealthTextSize()
+	return (conf and conf.font and conf.font.healthSize) or 9
+end
+
+-- TPerl_GetManaTextSize
+function TPerl_GetManaTextSize()
+	return (conf and conf.font and conf.font.manaSize) or 9
+end
+
+-- TPerl_GetRepTextSize
+function TPerl_GetRepTextSize()
+	return (conf and conf.font and conf.font.repSize) or 9
+end
+
+-- TPerl_GetXPTextSize
+function TPerl_GetXPTextSize()
+	return (conf and conf.font and conf.font.xpSize) or 9
+end
+
 -- TPerl_StatsFrame_Setup
 function TPerl_StatsFrame_Setup(self)
 	self:OnBackdropLoaded()
 	TPerl_SetChildMembers(self)
 	self.SetGrey = TPerl_StatsFrame_SetGrey
+end
+
+-- TPerl_ApplyBarTextSizes
+-- Call this to apply base text sizes to a stats frame
+function TPerl_ApplyBarTextSizes(statsFrame)
+	if not statsFrame then return end
+
+	local fontPath = TPerl_GetFont and TPerl_GetFont()
+	local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+	if not fontPath then return end
+
+	-- Health bar text
+	if statsFrame.healthBar and statsFrame.healthBar.text then
+		local hbText = statsFrame.healthBar.text
+		local _, _, flags = hbText:GetFont()
+		local baseSize = TPerl_GetHealthTextSize()
+		hbText.TPerlBaseSize = baseSize
+		hbText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- Mana bar text
+	if statsFrame.manaBar and statsFrame.manaBar.text then
+		local mbText = statsFrame.manaBar.text
+		local _, _, flags = mbText:GetFont()
+		local baseSize = TPerl_GetManaTextSize()
+		mbText.TPerlBaseSize = baseSize
+		mbText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- XP bar text
+	if statsFrame.xpBar and statsFrame.xpBar.text then
+		local xpText = statsFrame.xpBar.text
+		local _, _, flags = xpText:GetFont()
+		local baseSize = TPerl_GetXPTextSize()
+		xpText.TPerlBaseSize = baseSize
+		xpText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
+
+	-- Rep bar text
+	if statsFrame.repBar and statsFrame.repBar.text then
+		local repText = statsFrame.repBar.text
+		local _, _, flags = repText:GetFont()
+		local baseSize = TPerl_GetRepTextSize()
+		repText.TPerlBaseSize = baseSize
+		repText:SetFont(fontPath, baseSize * fontScale, flags)
+	end
 end
 
 -- TPerl_GetClassColour
@@ -960,7 +1079,19 @@ end
 --local TPerl_ColourHealthBar = TPerl_ColourHealthBar
 
 -- TPerl_SetValuedText
-function TPerl_SetValuedText(self, unitHealth, unitHealthMax, suffix)
+-- suffix: optional string to append (e.g., " +1234" for rested XP)
+-- percent: optional number (0-100) to display as " (X%)" at the end
+function TPerl_SetValuedText(self, unitHealth, unitHealthMax, suffix, percent)
+	-- Build the suffix string including percentage if provided
+	local finalSuffix = suffix or ""
+	if percent ~= nil then
+		if percent < 10 then
+			finalSuffix = finalSuffix .. format(" (%.1f%%)", percent)
+		else
+			finalSuffix = finalSuffix .. format(" (%d%%)", percent)
+		end
+	end
+	suffix = finalSuffix
 	local locale = GetLocale()
 	if locale == "zhCN" or locale == "zhTW" then
 		if unitHealthMax >= 1000000000000 then
@@ -1072,6 +1203,19 @@ function TPerl_SetValuedText(self, unitHealth, unitHealthMax, suffix)
 			self:SetFormattedText("%d/%d%s", unitHealth, unitHealthMax, suffix or "")
 		end
 	end
+	-- Apply custom font if configured
+	local fontPath = TPerl_GetFont and TPerl_GetFont()
+	local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+	if fontPath and self.GetFont then
+		local _, size, flags = self:GetFont()
+		if size then
+			-- Store base size on first use to avoid compounding scale
+			if not self.TPerlBaseSize then
+				self.TPerlBaseSize = size
+			end
+			self:SetFont(fontPath, self.TPerlBaseSize * fontScale, flags)
+		end
+	end
 end
 local SetValuedText = TPerl_SetValuedText
 
@@ -1109,6 +1253,12 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 	end
 
 	TPerl_ColourHealthBar(self, percent)
+
+	-- Calculate display percentage (0-100)
+	local showPercent = percent * 100
+	-- Only use inline percent if percent option is enabled and not in healer mode
+	local useInlinePercent = self.conf.percent and not (self.conf.healerMode and self.conf.healerMode.enable)
+
 	if (bar.percent) then
 		if (self.conf.healerMode and self.conf.healerMode.enable and self.conf.healerMode.type == 2) then
 			--bar.percent:SetText(hp - Max)
@@ -1143,6 +1293,9 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 					bar.percent:SetFormattedText("%d", health)
 				end
 			end
+		elseif useInlinePercent then
+			-- Hide separate percent element when using inline percent
+			bar.percent:SetText("")
 		else
 			local show = percent * 100
 			if (show < 10) then
@@ -1190,7 +1343,8 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 				end
 			end
 		else
-			SetValuedText(hbt, hp, Max)
+			-- Pass percentage for inline display (only if percent option is enabled)
+			SetValuedText(hbt, hp, Max, nil, useInlinePercent and showPercent or nil)
 		end
 	end
 	--TPerl_SetExpectedHealth(self)

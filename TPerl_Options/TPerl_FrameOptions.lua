@@ -879,6 +879,60 @@ function TPerl_Options_TextureSelect_Onload(self)
 	TPerl_Options_TextureSelect_Onload = nil
 end
 
+-- TPerl_Options_FontSelect_Onload
+function TPerl_Options_FontSelect_Onload(self)
+	self.Setup = TPerl_Options_SetupFunc
+	self.scrollBar = _G[self:GetName().."scrollBar"]
+	self.list = TPerl_AllFonts()
+	self.Selection = 1
+	if (self.list) then
+		self.scrollBar.bar:SetValue(max(0, min(self.Selection - 5, #self.list - 8)))
+	else
+		self.scrollBar.bar:SetValue(1)
+	end
+
+	self.UpdateFunction = function(self)
+		self:GetParent():SetFontPreviews()
+	end
+
+	self.SetFontPreviews = function(self)
+		local offset = self.scrollBar.bar:GetValue()
+		for i = 0, 9 do
+			local r, g, b
+			if (self.Selection - offset - 1 == i) then
+				r, g, b = 0, 1, 0
+			else
+				r, g, b = 1, 1, 1
+			end
+			local f = _G[self:GetName()..i]
+			if (f) then
+				if (i + offset + 1 > #self.list) then
+					f:Hide()
+				else
+					f:Show()
+					local fontName, fontPath = self.list[i + offset + 1][1], self.list[i + offset + 1][2]
+					f.name:SetText(fontName)
+					-- Set the font to preview itself
+					f.name:SetFont(fontPath, 12, "")
+					f.name:SetTextColor(r, g, b, 1)
+				end
+			end
+		end
+
+		if (FauxScrollFrame_Update(self.scrollBar, #self.list, 10, 1)) then
+			self.scrollBar:Show()
+		else
+			self.scrollBar:Hide()
+		end
+	end
+
+	if self and self.scrollBar and self.list then
+		FauxScrollFrame_Update(self.scrollBar, #self.list, 10, 1)
+	end
+
+	TPerl_Options_FontSelect_Onload = nil
+end
+
 -- TPerl_Options_SetTabColor
 function TPerl_Options_SetTabColor(self, color)
 	for i, y in pairs({"Enabled", "Disabled"}) do
@@ -2360,6 +2414,12 @@ local function TPerl_Global_ConfigDefault(default)
 --		inverse		= nil,		-- 1.8.6
 	}
 
+	default.font = {
+		name	= "Friz Quadrata TT",
+		path	= "Fonts\\FRIZQT__.TTF",
+		scale	= 1.0,
+	}
+
 	default.highlight = {
 		enable			= 1,
 		HOT			= 1,
@@ -3724,6 +3784,15 @@ if (TPerl_UpgradeSettings) then
 				old.raid.role = nil
 				old.raid.disableDefault = nil
 			end
+		end
+
+		-- Add font defaults if missing (for existing users upgrading)
+		if (not old.font) then
+			old.font = {
+				name = "Friz Quadrata TT",
+				path = "Fonts\\FRIZQT__.TTF",
+				scale = 1.0,
+			}
 		end
 	end
 

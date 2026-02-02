@@ -894,12 +894,20 @@ function TPerl_Target_SetMana(self)
 	self.statsFrame.manaBar:SetValue(unitPower)
 
 	if powerType >= 1 then
+		-- For rage/energy/etc, just show the value
 		self.statsFrame.manaBar.percent:SetText(unitPower)
+		TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
+	elseif self.conf.percent then
+		-- For mana, use inline percentage when percent option is enabled
+		local showPercent = 100 * powerPercent
+		TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax, nil, showPercent)
+		-- Hide separate percent element
+		self.statsFrame.manaBar.percent:SetText("")
 	else
-		self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)	--	TPerl_Percent[floor(100 * (unitPower / unitPowerMax))])
+		-- Percent option disabled, show traditional layout
+		TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
+		self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)
 	end
-
-	TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
 	--self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, unitPowerMax)
 end
 
@@ -1087,7 +1095,7 @@ function TPerl_Target_UpdateHealth(self)
 		elseif (UnitIsAFK(partyid) and conf.showAFK) --[[and (self == TPerl_Target or self == TPerl_Focus))]] then
 			self.statsFrame.healthBar.percent:SetText(CHAT_MSG_AFK)
 		else
-			self.statsFrame.manaBar.percent:Show()
+			-- Percent is now inline, don't show separate element
 			color = true
 		end
 	else
@@ -1850,27 +1858,21 @@ end
 -- TPerl_Target_SetWidth
 function TPerl_Target_SetWidth(self)
 	self.conf.size.width = max(0, self.conf.size.width or 0)
-	local w = 128 + ((self.conf.portrait and 1 or 0) * 62) + ((self.conf.percent and 1 or 0) * 32) + self.conf.size.width
+	-- Remove percent width expansion since we use inline percentages
+	local w = 128 + ((self.conf.portrait and 1 or 0) * 62) + self.conf.size.width
 
 	if not InCombatLockdown() then
 		self:SetWidth(w)
 	end
 
-	if self.conf.percent then
-		if not InCombatLockdown() then
-			self.nameFrame:SetWidth(160 + self.conf.size.width)
-			self.statsFrame:SetWidth(160 + self.conf.size.width)
-		end
-		self.statsFrame.healthBar.percent:Show()
-		self.statsFrame.manaBar.percent:Show()
-	else
-		if not InCombatLockdown() then
-			self.nameFrame:SetWidth(128 + self.conf.size.width)
-			self.statsFrame:SetWidth(128 + self.conf.size.width)
-		end
-		self.statsFrame.healthBar.percent:Hide()
-		self.statsFrame.manaBar.percent:Hide()
+	-- Always use same width since we now use inline percentages
+	if not InCombatLockdown() then
+		self.nameFrame:SetWidth(128 + self.conf.size.width)
+		self.statsFrame:SetWidth(128 + self.conf.size.width)
 	end
+	-- Hide separate percent elements (using inline percentages now)
+	self.statsFrame.healthBar.percent:Hide()
+	self.statsFrame.manaBar.percent:Hide()
 
 	self.conf.scale = self.conf.scale or 0.8
 	if not InCombatLockdown() then

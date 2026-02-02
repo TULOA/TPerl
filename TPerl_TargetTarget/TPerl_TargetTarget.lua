@@ -591,23 +591,15 @@ function TPerl_TargetTarget_SetWidth(self)
 	self.conf.size.width = max(0, self.conf.size.width or 0)
 	local bonus = self.conf.size.width
 
-	if self.conf.percent then
-		if (not InCombatLockdown()) then
-			self:SetWidth(160 + bonus)
-			self.nameFrame:SetWidth(160 + bonus)
-			self.statsFrame:SetWidth(160 + bonus)
-		end
-		self.statsFrame.healthBar.percent:Show()
-		self.statsFrame.manaBar.percent:Show()
-	else
-		if (not InCombatLockdown()) then
-			self:SetWidth(128 + bonus)
-			self.nameFrame:SetWidth(128 + bonus)
-			self.statsFrame:SetWidth(128 + bonus)
-		end
-		self.statsFrame.healthBar.percent:Hide()
-		self.statsFrame.manaBar.percent:Hide()
+	-- Always use same width since we now use inline percentages
+	if (not InCombatLockdown()) then
+		self:SetWidth(128 + bonus)
+		self.nameFrame:SetWidth(128 + bonus)
+		self.statsFrame:SetWidth(128 + bonus)
 	end
+	-- Hide separate percent elements (using inline percentages now)
+	self.statsFrame.healthBar.percent:Hide()
+	self.statsFrame.manaBar.percent:Hide()
 
 	self.conf.scale = self.conf.scale or 0.8
 	if (not InCombatLockdown()) then

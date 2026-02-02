@@ -1223,6 +1223,240 @@
 		</Frames>
 	</Frame>
 
+	<!-- Font Button Selector Template -->
+	<Button name="TPerl_Options_FontButtonSelector" virtual="true">
+		<Size>
+			<AbsDimension x="170" y="15"/>
+		</Size>
+		<Scripts>
+			<OnLoad>
+				self.name = _G[self:GetName().."name"]
+			</OnLoad>
+			<OnClick>
+				self:GetParent().Selection = self:GetID() + self:GetParent().scrollBar.bar:GetValue() + 1
+				self:GetParent():SetFontPreviews()
+			</OnClick>
+			<OnMouseWheel>
+				if (delta > 0) then
+					self:GetParent().scrollBar.bar:SetValue(self:GetParent().scrollBar.bar:GetValue() - 1)
+				else
+					self:GetParent().scrollBar.bar:SetValue(self:GetParent().scrollBar.bar:GetValue() + 1)
+				end
+			</OnMouseWheel>
+		</Scripts>
+		<HighlightTexture file="Interface\Addons\TPerl\Images\TPerl_Highlight" alphaMode="ADD">
+			<TexCoords left="0" right="1" top="0.5" bottom="1"/>
+		</HighlightTexture>
+		<Layers>
+			<Layer level="OVERLAY">
+				<FontString name="$parentname" inherits="GameFontNormal" setAllPoints="true">
+					<Color r="1" g="1" b="1"/>
+				</FontString>
+			</Layer>
+		</Layers>
+	</Button>
+
+	<!-- Font Selector Dialog -->
+	<Frame name="TPerl_Options_FontSelect" frameStrata="DIALOG" inherits="TPerl_OptionsTemplateNaked" parent="UIParent" hidden="true">
+		<Scripts>
+			<OnLoad function="TPerl_Options_FontSelect_Onload"/>
+			<OnShow>
+				if (not self.list) then
+					self.list = TPerl_AllFonts()
+				end
+				if (TPerlDB and TPerlDB.font and TPerlDB.font.name and self.list) then
+					for k, v in pairs(self.list) do
+						if (TPerlDB.font.name == v[1] and TPerlDB.font.path == v[2]) then
+							self.Selection = k
+						end
+					end
+				end
+
+				self.scrollBar.bar:SetValue(max(0, min(self.Selection - 5, self.list and #self.list - 8 or 0)))
+				self:SetFontPreviews()
+				self:Setup()
+
+				TPerl_Options_Mask:Show()
+			</OnShow>
+			<OnHide>
+				TPerl_Options_Mask:Hide()
+			</OnHide>
+			<OnMouseWheel>
+				if (delta > 0) then
+					self.scrollBar.bar:SetValue(self.scrollBar.bar:GetValue() - 1)
+				else
+					self.scrollBar.bar:SetValue(self.scrollBar.bar:GetValue() + 1)
+				end
+			</OnMouseWheel>
+		</Scripts>
+		<Size>
+			<AbsDimension x="215" y="260"/>
+		</Size>
+		<Frames>
+			<Button name="$parent0" inherits="TPerl_Options_FontButtonSelector" id="0">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="$parent_Area">
+						<Offset>
+							<AbsDimension x="5" y="-5"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent1" inherits="TPerl_Options_FontButtonSelector" id="1">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent0">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent2" inherits="TPerl_Options_FontButtonSelector" id="2">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent1">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent3" inherits="TPerl_Options_FontButtonSelector" id="3">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent2">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent4" inherits="TPerl_Options_FontButtonSelector" id="4">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent3">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent5" inherits="TPerl_Options_FontButtonSelector" id="5">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent4">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent6" inherits="TPerl_Options_FontButtonSelector" id="6">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent5">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent7" inherits="TPerl_Options_FontButtonSelector" id="7">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent6">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent8" inherits="TPerl_Options_FontButtonSelector" id="8">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent7">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<Button name="$parent9" inherits="TPerl_Options_FontButtonSelector" id="9">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="BOTTOMLEFT" relativeTo="$parent8">
+						<Offset>
+							<AbsDimension x="0" y="-4"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+			</Button>
+			<ScrollFrame name="$parentscrollBar" inherits="FauxScrollFrameTemplate">
+				<Anchors>
+					<Anchor point="TOPLEFT" relativePoint="TOPRIGHT" relativeTo="$parent0">
+						<Offset>
+							<AbsDimension x="-25" y="0"/>
+						</Offset>
+					</Anchor>
+					<Anchor point="BOTTOMRIGHT" relativePoint="BOTTOMRIGHT" relativeTo="$parent9">
+						<Offset>
+							<AbsDimension x="0" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnLoad>
+						self.bar = _G[self:GetName().."ScrollBar"]
+					</OnLoad>
+					<OnVerticalScroll>
+						FauxScrollFrame_OnVerticalScroll(self, offset, 1, self:GetParent().UpdateFunction)
+					</OnVerticalScroll>
+					<OnMouseWheel>
+						if (delta > 0) then
+							self.bar:SetValue(self.bar:GetValue() - 1)
+						else
+							self.bar:SetValue(self.bar:GetValue() + 1)
+						end
+					</OnMouseWheel>
+				</Scripts>
+			</ScrollFrame>
+			<Button name="$parent_OK" inherits="TPerlButtonTemplate" text="TPERL_OK">
+				<Size>
+					<AbsDimension x="80" y="24"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOMLEFT" relativeTo="$parent_Area">
+						<Offset>
+							<AbsDimension x="0" y="16"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						if (TPerlDB) then
+							if (not TPerlDB.font) then
+								TPerlDB.font = {scale = 1.0}
+							end
+							TPerlDB.font.name = self:GetParent().list[self:GetParent().Selection][1]
+							TPerlDB.font.path = self:GetParent().list[self:GetParent().Selection][2]
+							TPerl_Options_FontSelect:Hide()
+							TPerl_SetFonts()
+						end
+					</OnClick>
+				</Scripts>
+			</Button>
+			<Button name="$parent_Cancel" inherits="TPerlButtonTemplate" text="TPERL_CANCEL">
+				<Size>
+					<AbsDimension x="80" y="24"/>
+				</Size>
+				<Anchors>
+					<Anchor point="BOTTOMLEFT" relativePoint="BOTTOMRIGHT" relativeTo="$parent_OK">
+						<Offset>
+							<AbsDimension x="8" y="0"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>
+						TPerl_Options_FontSelect:Hide()
+					</OnClick>
+				</Scripts>
+			</Button>
+		</Frames>
+	</Frame>
+
 	<Frame name="TPerl_OptClassSelTemplate" inherits="TPerlBackdropTemplate" virtual="true">
 		<Size>
 			<AbsDimension x="160" y="24"/>
@@ -1761,6 +1995,9 @@
 					end
 
 					table.insert(tabs, TPerl_Options_Tab9)
+
+					-- Font tab (always available)
+					table.insert(tabs, TPerl_Options_Tab13)
 
 					if (TPerl_RaidHelper_Frame) then
 						table.insert(tabs, TPerl_Options_Tab10)
@@ -2930,7 +3167,8 @@
 							"_Colour_Options",
 							"_Helper_Options",
 							"_Monitor_Options",
-							"_Admin_Options"
+							"_Admin_Options",
+							"_Font_Options"
 						}
 
 						self.SelectTab = function(self, id)
@@ -3121,6 +3359,18 @@
 							</OnClick>
 						</Scripts>
 					</Button>
+
+					<Button name="$parent13" inherits="TPerlTabTemplate" id="13" hidden="true">
+						<Anchors>
+							<Anchor point="BOTTOMLEFT" relativePoint="BOTTOMRIGHT" relativeTo="$parent12"/>
+						</Anchors>
+						<Scripts>
+							<OnClick>
+								self:GetParent():SelectTab(13)
+								TPerl_Options_InCombatChange(UnitAffectingCombat("player"))
+							</OnClick>
+						</Scripts>
+					</Button>
 				</Frames>
 			</Frame>
 
@@ -3189,7 +3439,7 @@
 						<Anchors>
 							<Anchor point="TOPLEFT" relativeTo="$parent_BarTextures" relativePoint="BOTTOMLEFT">
 								<Offset>
-									<AbsDimension x="-6" y="-2"/>
+									<AbsDimension x="-6" y="-4"/>
 								</Offset>
 							</Anchor>
 						</Anchors>
@@ -17239,6 +17489,281 @@
 									end
 								end
 								_G[self:GetName().."Current"]:SetText(floor(100 * TPerl_Admin.Transparency + 0.5).."%")
+							</OnValueChanged>
+						</Scripts>
+					</Slider>
+				</Frames>
+			</Frame>
+
+			<!-- Font Options -->
+			<Frame name="$parent_Font_Options" inherits="TPerlBackdropTemplate" hidden="true">
+				<Scripts>
+					<OnLoad>
+						self:OnBackdropLoaded()
+						self:SetScale(0.9)
+					</OnLoad>
+				</Scripts>
+				<Anchors>
+					<Anchor point="TOPLEFT" relativeTo="TPerl_Options_Area_Tabs"/>
+					<Anchor point="BOTTOMRIGHT" relativeTo="TPerl_Options_Area_Tabs"/>
+				</Anchors>
+
+				<Frames>
+					<!-- Font Selection Button -->
+					<Button name="$parent_FontSelect">
+						<Size>
+							<AbsDimension x="120" y="18"/>
+						</Size>
+						<HitRectInsets>
+							<AbsInset left="0" right="-80" top="0" bottom="0"/>
+						</HitRectInsets>
+						<Anchors>
+							<Anchor point="TOPLEFT">
+								<Offset>
+									<AbsDimension x="12" y="-12"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Layers>
+							<Layer level="ARTWORK">
+								<FontString name="$parentText" inherits="GameFontNormal" text="Font">
+									<Anchors>
+										<Anchor point="LEFT"/>
+									</Anchors>
+								</FontString>
+								<FontString name="$parentFont" inherits="GameFontHighlight" text="Default" justifyH="LEFT">
+									<Anchors>
+										<Anchor point="LEFT" relativeTo="$parentText" relativePoint="RIGHT">
+											<Offset>
+												<AbsDimension x="10" y="0"/>
+											</Offset>
+										</Anchor>
+									</Anchors>
+								</FontString>
+							</Layer>
+						</Layers>
+						<Scripts>
+							<OnShow>
+								if (TPerlDB.font and TPerlDB.font.name) then
+									_G[self:GetName().."Font"]:SetText(TPerlDB.font.name)
+								else
+									_G[self:GetName().."Font"]:SetText("Friz Quadrata TT")
+								end
+							</OnShow>
+							<OnClick>
+								TPerl_Options_FontSelect:Show()
+							</OnClick>
+						</Scripts>
+						<HighlightTexture file="Interface\Addons\TPerl\Images\TPerl_Highlight" alphaMode="ADD">
+							<TexCoords left="0" right="1" top="0.5" bottom="1"/>
+						</HighlightTexture>
+					</Button>
+
+					<!-- Font Scale Slider -->
+					<Slider name="$parent_FontScale" inherits="TPerlSlider">
+						<Size>
+							<AbsDimension x="120" y="16"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="$parent_FontSelect" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="0" y="-20"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnLoad>
+								TPerl_SliderSetup(self)
+								TPerl_OptionsSetMyText(self, "TPERL_CONF_FONT_SCALE")
+								_G[self:GetName().."Low"]:SetText("50%")
+								_G[self:GetName().."High"]:SetText("200%")
+								self:SetMinMaxValues(5, 20)
+								self:SetValueStep(1)
+								self:SetObeyStepOnDrag(true)
+							</OnLoad>
+							<OnShow>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								if (TPerlDB.font.scale) then
+									self:SetValue(TPerlDB.font.scale * 10)
+								else
+									self:SetValue(10)
+								end
+							</OnShow>
+							<OnValueChanged>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								TPerlDB.font.scale = value / 10
+								_G[self:GetName().."Current"]:SetText(string.format("%d%%", TPerlDB.font.scale * 100))
+								if TPerl_SetFonts then
+									TPerl_SetFonts()
+								end
+							</OnValueChanged>
+						</Scripts>
+					</Slider>
+
+					<!-- Health Text Size Slider -->
+					<Slider name="$parent_HealthTextSize" inherits="TPerlSlider">
+						<Size>
+							<AbsDimension x="120" y="16"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="$parent_FontScale" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnLoad>
+								TPerl_SliderSetup(self)
+								TPerl_OptionsSetMyText(self, "TPERL_CONF_HEALTH_TEXT_SIZE")
+								_G[self:GetName().."Low"]:SetText("6")
+								_G[self:GetName().."High"]:SetText("18")
+								self:SetMinMaxValues(6, 18)
+								self:SetValueStep(1)
+								self:SetObeyStepOnDrag(true)
+							</OnLoad>
+							<OnShow>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								self:SetValue(TPerlDB.font.healthSize or 9)
+							</OnShow>
+							<OnValueChanged>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								TPerlDB.font.healthSize = value
+								_G[self:GetName().."Current"]:SetText(string.format("%d", value))
+								if TPerl_SetFonts then
+									TPerl_SetFonts()
+								end
+							</OnValueChanged>
+						</Scripts>
+					</Slider>
+
+					<!-- Power Text Size Slider -->
+					<Slider name="$parent_ManaTextSize" inherits="TPerlSlider">
+						<Size>
+							<AbsDimension x="120" y="16"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="$parent_HealthTextSize" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnLoad>
+								TPerl_SliderSetup(self)
+								TPerl_OptionsSetMyText(self, "TPERL_CONF_MANA_TEXT_SIZE")
+								_G[self:GetName().."Low"]:SetText("6")
+								_G[self:GetName().."High"]:SetText("18")
+								self:SetMinMaxValues(6, 18)
+								self:SetValueStep(1)
+								self:SetObeyStepOnDrag(true)
+							</OnLoad>
+							<OnShow>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								self:SetValue(TPerlDB.font.manaSize or 9)
+							</OnShow>
+							<OnValueChanged>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								TPerlDB.font.manaSize = value
+								_G[self:GetName().."Current"]:SetText(string.format("%d", value))
+								if TPerl_SetFonts then
+									TPerl_SetFonts()
+								end
+							</OnValueChanged>
+						</Scripts>
+					</Slider>
+
+					<!-- Reputation Text Size Slider -->
+					<Slider name="$parent_RepTextSize" inherits="TPerlSlider">
+						<Size>
+							<AbsDimension x="120" y="16"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="$parent_ManaTextSize" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnLoad>
+								TPerl_SliderSetup(self)
+								TPerl_OptionsSetMyText(self, "TPERL_CONF_REP_TEXT_SIZE")
+								_G[self:GetName().."Low"]:SetText("6")
+								_G[self:GetName().."High"]:SetText("18")
+								self:SetMinMaxValues(6, 18)
+								self:SetValueStep(1)
+								self:SetObeyStepOnDrag(true)
+							</OnLoad>
+							<OnShow>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								self:SetValue(TPerlDB.font.repSize or 9)
+							</OnShow>
+							<OnValueChanged>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								TPerlDB.font.repSize = value
+								_G[self:GetName().."Current"]:SetText(string.format("%d", value))
+								if TPerl_SetFonts then
+									TPerl_SetFonts()
+								end
+							</OnValueChanged>
+						</Scripts>
+					</Slider>
+
+					<!-- Experience Text Size Slider -->
+					<Slider name="$parent_XPTextSize" inherits="TPerlSlider">
+						<Size>
+							<AbsDimension x="120" y="16"/>
+						</Size>
+						<Anchors>
+							<Anchor point="TOPLEFT" relativeTo="$parent_RepTextSize" relativePoint="BOTTOMLEFT">
+								<Offset>
+									<AbsDimension x="0" y="-24"/>
+								</Offset>
+							</Anchor>
+						</Anchors>
+						<Scripts>
+							<OnLoad>
+								TPerl_SliderSetup(self)
+								TPerl_OptionsSetMyText(self, "TPERL_CONF_XP_TEXT_SIZE")
+								_G[self:GetName().."Low"]:SetText("6")
+								_G[self:GetName().."High"]:SetText("18")
+								self:SetMinMaxValues(6, 18)
+								self:SetValueStep(1)
+								self:SetObeyStepOnDrag(true)
+							</OnLoad>
+							<OnShow>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								self:SetValue(TPerlDB.font.xpSize or 9)
+							</OnShow>
+							<OnValueChanged>
+								if (not TPerlDB.font) then
+									TPerlDB.font = {name = "Friz Quadrata TT", path = "Fonts\\FRIZQT__.TTF", scale = 1.0}
+								end
+								TPerlDB.font.xpSize = value
+								_G[self:GetName().."Current"]:SetText(string.format("%d", value))
+								if TPerl_SetFonts then
+									TPerl_SetFonts()
+								end
 							</OnValueChanged>
 						</Scripts>
 					</Slider>

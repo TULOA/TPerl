@@ -479,14 +479,42 @@ local function TPerl_Player_UpdateRep(self)
 
 			if max == 1 then
 				rb.text:SetText(name)
+			elseif pconf.percent then
+				-- Include inline percentage when percent option is enabled
+				if perc < 10 then
+					rb.text:SetFormattedText("%d/%d (%.1f%%)", value, max, perc)
+				else
+					rb.text:SetFormattedText("%d/%d (%d%%)", value, max, perc)
+				end
+				-- Hide separate percent element when using inline percent
+				rb.percent:SetText("")
 			else
 				rb.text:SetFormattedText("%d/%d", value, max)
+				if perc < 100 then
+					rb.percent:SetFormattedText(perc1F, perc)
+				else
+					rb.percent:SetFormattedText(percD, perc)
+				end
 			end
 
-			if perc < 100 then
-				rb.percent:SetFormattedText(perc1F, perc)
-			else
-				rb.percent:SetFormattedText(percD, perc)
+			-- Apply custom font
+			local fontPath = TPerl_GetFont and TPerl_GetFont()
+			local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+			if fontPath then
+				local _, size, flags = rb.text:GetFont()
+				if size then
+					if not rb.text.TPerlBaseSize then
+						rb.text.TPerlBaseSize = size
+					end
+					rb.text:SetFont(fontPath, rb.text.TPerlBaseSize * fontScale, flags)
+				end
+				_, size, flags = rb.percent:GetFont()
+				if size then
+					if not rb.percent.TPerlBaseSize then
+						rb.percent.TPerlBaseSize = size
+					end
+					rb.percent:SetFont(fontPath, rb.percent.TPerlBaseSize * fontScale, flags)
+				end
 			end
 		end
 	end
@@ -507,6 +535,8 @@ local function TPerl_Player_UpdateXP(self)
 
 			local color
 			local w = xpBar:GetRight() - xpBar:GetLeft()
+			local xpPercent = (playerxp * 100) / playerxpmax
+			local useInlinePercent = pconf.percent
 			for mode = 1, 3 do
 				local suffix
 				if (playerxprest > 0) then
@@ -532,9 +562,9 @@ local function TPerl_Player_UpdateXP(self)
 				end
 
 				if (pconf.xpDeficit) then
-					TPerl_SetValuedText(xpBar.text, playerxp - playerxpmax, playerxpmax, suffix)
+					TPerl_SetValuedText(xpBar.text, playerxp - playerxpmax, playerxpmax, suffix, useInlinePercent and xpPercent or nil)
 				else
-					TPerl_SetValuedText(xpBar.text, playerxp, playerxpmax, suffix)
+					TPerl_SetValuedText(xpBar.text, playerxp, playerxpmax, suffix, useInlinePercent and xpPercent or nil)
 				end
 				if (xpBar.text:GetStringWidth() + 20 <= w) then
 					break
@@ -557,7 +587,22 @@ local function TPerl_Player_UpdateXP(self)
 			end
 			restBar.tex:SetTexCoord(0, y, 0, 1)
 			restBar.bg:SetVertexColor(color.r, color.g, color.b, 0.25)
-			xpBar.percent:SetFormattedText(percD, (playerxp * 100) / playerxpmax)
+			-- Hide separate percent element when using inline percent, otherwise show it
+			if useInlinePercent then
+				xpBar.percent:SetText("")
+			else
+				xpBar.percent:SetFormattedText(percD, xpPercent)
+			end
+
+			-- Apply custom font to percent using config-based size
+			local fontPath = TPerl_GetFont and TPerl_GetFont()
+			local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+			if fontPath then
+				local _, _, flags = xpBar.percent:GetFont()
+				local xpSize = TPerl_GetXPTextSize and TPerl_GetXPTextSize() or 9
+				xpBar.percent.TPerlBaseSize = xpSize
+				xpBar.percent:SetFont(fontPath, xpSize * fontScale, flags or "")
+			end
 		end
 	end
 end
@@ -666,6 +711,22 @@ function TPerl_Player_DruidBarUpdate(self)
 		if (MakeDruidBar) then
 			MakeDruidBar(self)
 			druidBar = self.statsFrame.druidBar
+			-- Apply font settings to newly created druid bar (uses mana size)
+			if druidBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local manaSize = TPerl_GetManaTextSize and TPerl_GetManaTextSize() or 9
+				if fontPath and druidBar.text then
+					local _, _, flags = druidBar.text:GetFont()
+					druidBar.text.TPerlBaseSize = manaSize
+					druidBar.text:SetFont(fontPath, manaSize * fontScale, flags or "")
+				end
+				if fontPath and druidBar.percent then
+					local _, _, flags = druidBar.percent:GetFont()
+					druidBar.percent.TPerlBaseSize = manaSize
+					druidBar.percent:SetFont(fontPath, manaSize * fontScale, flags or "")
+				end
+			end
 		end
 	end
 
@@ -677,8 +738,20 @@ function TPerl_Player_DruidBarUpdate(self)
 
 	druidBar:SetMinMaxValues(0, maxMana or 1)
 	druidBar:SetValue(currMana or 0)
-	druidBar.text:SetFormattedText("%d/%d", ceil(currMana or 0), maxMana or 1)
-	druidBar.percent:SetFormattedText(percD, (currMana or 0) * 100 / (maxMana or 1))
+	local druidPercent = (currMana or 0) * 100 / (maxMana or 1)
+	if pconf.percent then
+		-- Use inline percentage when percent option is enabled
+		if druidPercent < 10 then
+			druidBar.text:SetFormattedText("%d/%d (%.1f%%)", ceil(currMana or 0), maxMana or 1, druidPercent)
+		else
+			druidBar.text:SetFormattedText("%d/%d (%d%%)", ceil(currMana or 0), maxMana or 1, druidPercent)
+		end
+		-- Hide separate percent element when using inline percent
+		druidBar.percent:SetText("")
+	else
+		druidBar.text:SetFormattedText("%d/%d", ceil(currMana or 0), maxMana or 1)
+		druidBar.percent:SetFormattedText(percD, druidPercent)
+	end
 
 	--local druidBarExtra
 	if ((playerClass == "DRUID" or playerClass == "PRIEST") and UnitPowerType(self.partyid) > 0) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0) then -- Shaman's UnitPowerType is buggy
@@ -762,10 +835,16 @@ local function TPerl_Player_UpdateMana(self)
 	-- end division by 0 check
 
 	--self.statsFrame.manaBar.text:SetFormattedText("%d/%d", playermana, playermanamax)
-	TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax)
+	-- Pass percentage for inline display (mana type only, and only if percent option is enabled)
+	local useInlinePercent = pconf.percent and (powerType < 1 and UnitPowerMax(self.partyid, powerType) >= 1)
+	local showPercent = useInlinePercent and (powerPercent * 100) or nil
+	TPerl_SetValuedText(self.statsFrame.manaBar.text, unitPower, unitPowerMax, nil, showPercent)
 
 	if (powerType >= 1 or UnitPowerMax(self.partyid, powerType) < 1) then
 		self.statsFrame.manaBar.percent:SetText(unitPower)
+	elseif useInlinePercent then
+		-- Hide separate percent element when using inline percent
+		self.statsFrame.manaBar.percent:SetText("")
 	else
 		self.statsFrame.manaBar.percent:SetFormattedText(percD, powerPercent * 100)
 	end
@@ -776,9 +855,7 @@ local function TPerl_Player_UpdateMana(self)
 		if (pconf.values) then
 			self.statsFrame.manaBar.text:Show()
 		end
-		if (pconf.percent) then
-			self.statsFrame.manaBar.percent:Show()
-		end
+		-- Percent is now inline, don't show separate element
 	end
 
 	if (playerClass == "DRUID") or (playerClass == "SHAMAN") or (playerClass == "PRIEST") then
@@ -1991,35 +2068,27 @@ end
 -- TPerl_Player_SetWidth
 function TPerl_Player_SetWidth(self)
 	pconf.size.width = max(0, pconf.size.width or 0)
-	if (pconf.percent) then
-		self.nameFrame:SetWidth(160 + pconf.size.width)
-		self.statsFrame:SetWidth(160 + pconf.size.width)
-		self.statsFrame.healthBar.percent:Show()
-		self.statsFrame.manaBar.percent:Show()
-
-		if (self.statsFrame.xpBar) then
-			self.statsFrame.xpBar.percent:Show()
-		end
-		if (self.statsFrame.repBar) then
-			self.statsFrame.repBar.percent:Show()
-		end
-	else
-		self.nameFrame:SetWidth(128 + pconf.size.width)
-		self.statsFrame:SetWidth(128 + pconf.size.width)
-		self.statsFrame.healthBar.percent:Hide()
-		self.statsFrame.manaBar.percent:Hide()
-		if (self.statsFrame.xpBar) then
-			self.statsFrame.xpBar.percent:Hide()
-		end
-		if (self.statsFrame.repBar) then
-			self.statsFrame.repBar.percent:Hide()
-		end
+	-- Always use same width since we now use inline percentages
+	self.nameFrame:SetWidth(128 + pconf.size.width)
+	self.statsFrame:SetWidth(128 + pconf.size.width)
+	-- Hide separate percent elements (using inline percentages now)
+	self.statsFrame.healthBar.percent:Hide()
+	self.statsFrame.manaBar.percent:Hide()
+	if (self.statsFrame.xpBar) then
+		self.statsFrame.xpBar.percent:Hide()
+	end
+	if (self.statsFrame.repBar) then
+		self.statsFrame.repBar.percent:Hide()
+	end
+	if (self.statsFrame.druidBar) then
+		self.statsFrame.druidBar.percent:Hide()
 	end
 
 	local h = 40 + ((((self.statsFrame.druidBar and self.statsFrame.druidBar:IsShown()) and 1 or 0) + (pconf.repBar and 1 or 0) + (pconf.xpBar and 1 or 0)) * 10)
 	self.statsFrame:SetHeight(h)
 
-	self:SetWidth(128 + (pconf.portrait and 1 or 0) * 62 + (pconf.percent and 1 or 0) * 32 + pconf.size.width)
+	-- Remove percent width expansion since we use inline percentages
+	self:SetWidth(128 + (pconf.portrait and 1 or 0) * 62 + pconf.size.width)
 	self:SetScale(pconf.scale)
 
 	TPerl_StatsFrameSetup(self, {self.statsFrame.druidBar, self.statsFrame.xpBar, self.statsFrame.repBar})
@@ -2091,6 +2160,22 @@ function TPerl_Player_Set_Bits(self)
 	if (pconf.repBar) then
 		if (not self.statsFrame.repBar) then
 			CreateBar(self, "repBar")
+			-- Apply font settings to newly created rep bar
+			if self.statsFrame.repBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local repSize = TPerl_GetRepTextSize and TPerl_GetRepTextSize() or 9
+				if fontPath and self.statsFrame.repBar.text then
+					local _, _, flags = self.statsFrame.repBar.text:GetFont()
+					self.statsFrame.repBar.text.TPerlBaseSize = repSize
+					self.statsFrame.repBar.text:SetFont(fontPath, repSize * fontScale, flags or "")
+				end
+				if fontPath and self.statsFrame.repBar.percent then
+					local _, _, flags = self.statsFrame.repBar.percent:GetFont()
+					self.statsFrame.repBar.percent.TPerlBaseSize = repSize
+					self.statsFrame.repBar.percent:SetFont(fontPath, repSize * fontScale, flags or "")
+				end
+			end
 		end
 
 		self.statsFrame.repBar:Show()
@@ -2103,6 +2188,22 @@ function TPerl_Player_Set_Bits(self)
 	if (pconf.xpBar) then
 		if (not self.statsFrame.xpBar) then
 			MakeXPBar(self)
+			-- Apply font settings to newly created XP bar
+			if self.statsFrame.xpBar and TPerl_GetFont then
+				local fontPath = TPerl_GetFont()
+				local fontScale = TPerl_GetFontScale and TPerl_GetFontScale() or 1.0
+				local xpSize = TPerl_GetXPTextSize and TPerl_GetXPTextSize() or 9
+				if fontPath and self.statsFrame.xpBar.text then
+					local _, _, flags = self.statsFrame.xpBar.text:GetFont()
+					self.statsFrame.xpBar.text.TPerlBaseSize = xpSize
+					self.statsFrame.xpBar.text:SetFont(fontPath, xpSize * fontScale, flags or "")
+				end
+				if fontPath and self.statsFrame.xpBar.percent then
+					local _, _, flags = self.statsFrame.xpBar.percent:GetFont()
+					self.statsFrame.xpBar.percent.TPerlBaseSize = xpSize
+					self.statsFrame.xpBar.percent:SetFont(fontPath, xpSize * fontScale, flags or "")
+				end
+			end
 		end
 
 		self.statsFrame.xpBar:Show()
