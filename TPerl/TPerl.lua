@@ -59,7 +59,16 @@ local unpack = unpack
 
 local CheckInteractDistance = CheckInteractDistance
 local CreateFrame = CreateFrame
-local DebuffTypeColor = DebuffTypeColor
+local DebuffTypeColor = DebuffTypeColor or {}
+
+if IsRetail then
+ DebuffTypeColor["none"]     = { r = 0.80, g = 0, b = 0 };  
+	DebuffTypeColor["Magic"]    = { r = 0.20, g = 0.60, b = 1.00 };  
+	DebuffTypeColor["Curse"]    = { r = 0.60, g = 0.00, b = 1.00 };  
+	DebuffTypeColor["Disease"]  = { r = 0.60, g = 0.40, b = 0 };  
+	DebuffTypeColor["Poison"]   = { r = 0.00, g = 0.60, b = 0 };  
+	DebuffTypeColor[""] = DebuffTypeColor["none"];
+end
 local GetAddOnCPUUsage = GetAddOnCPUUsage
 local GetAddOnMemoryUsage = GetAddOnMemoryUsage
 local GetCursorPosition = GetCursorPosition
@@ -893,14 +902,16 @@ local function smoothColor(percentage, partyid)
 		end
  else
 	 local curve = C_CurveUtil.CreateColorCurve()
-		curve:SetType(Enum.LuaCurveType.Linear)
-		curve:AddPoint(0.0, CreateColor(1, 0, 0))
-		curve:AddPoint(0.3, CreateColor(1, 1, 0))
-		curve:AddPoint(0.7, CreateColor(0, 1, 0))
+		curve:SetType(Enum.LuaCurveType.Step)
+		curve:AddPoint(0.0, CreateColor(1, 0, 0, 1))
+		curve:AddPoint(0.3, CreateColor(1, 1, 0, 1))
+		curve:AddPoint(0.7, CreateColor(0, 1, 0, 1))
 
 		--local unit = "player"
-		color = UnitHealthPercent(partyid, false, curve)
-		r, g, b = color:GetRGB()
+		if partyid then
+		 color = UnitHealthPercent(partyid, false, curve)
+		 r, g, b = color:GetRGB()
+		end
 	end
  
 	return r, g, b, color
@@ -1226,7 +1237,7 @@ function TPerl_SetHealthBar(self, hp, Max, hpInverse)
 									end
 					end
 					
-					-- End Not isRetail
+					-- end not IsRetail
 				--else
 				 
 			--end
@@ -1823,49 +1834,56 @@ end
 
 -- TPerl_ReactionColour
 function TPerl_ReactionColour(argUnit)
-	if (UnitPlayerControlled(argUnit) or not UnitIsVisible(argUnit)) then
-		if (UnitFactionGroup("player") == UnitFactionGroup(argUnit)) then
-			if (UnitIsEnemy("player", argUnit)) then
-				-- Dueling
-				return conf.colour.reaction.enemy
-			elseif (UnitIsPVP(argUnit)) then
-				return conf.colour.reaction.friend
-			end
-		else
-			if (UnitIsPVP(argUnit)) then
-				if (UnitIsPVP("player")) then
-					return conf.colour.reaction.enemy
+ --print(argUnit)
+ if not issecretvalue(argUnit) then
+			if (UnitPlayerControlled(argUnit) or not UnitIsVisible(argUnit)) then
+				if (UnitFactionGroup("player") == UnitFactionGroup(argUnit)) then
+					if (UnitIsEnemy("player", argUnit)) then
+						-- Dueling
+						return conf.colour.reaction.enemy
+					elseif (UnitIsPVP(argUnit)) then
+						return conf.colour.reaction.friend
+					end
 				else
-					return conf.colour.reaction.neutral
-				end
-			end
-		end
-	else
-		if UnitIsTapDenied(argUnit) and not UnitIsFriend("player", argUnit) then
-			return conf.colour.reaction.tapped
-		else
-			local reaction = UnitReaction(argUnit, "player")
-			if (reaction) then
-				if (reaction >= 5) then
-					return conf.colour.reaction.friend
-				elseif (reaction <= 2) then
-					return conf.colour.reaction.enemy
-				elseif (reaction == 3) then
-					return conf.colour.reaction.unfriendly
-				else
-					return conf.colour.reaction.neutral
+					if (UnitIsPVP(argUnit)) then
+						if (UnitIsPVP("player")) then
+							return conf.colour.reaction.enemy
+						else
+							return conf.colour.reaction.neutral
+						end
+					end
 				end
 			else
-				if (UnitFactionGroup("player") == UnitFactionGroup(argUnit)) then
-					return conf.colour.reaction.friend
-				elseif (UnitIsEnemy("player", argUnit)) then
-					return conf.colour.reaction.enemy
+				if UnitIsTapDenied(argUnit) and not UnitIsFriend("player", argUnit) then
+					return conf.colour.reaction.tapped
 				else
-					return conf.colour.reaction.neutral
+					local reaction = UnitReaction(argUnit, "player")
+					if (reaction) then
+						if (reaction >= 5) then
+							return conf.colour.reaction.friend
+						elseif (reaction <= 2) then
+							return conf.colour.reaction.enemy
+						elseif (reaction == 3) then
+							return conf.colour.reaction.unfriendly
+						else
+							return conf.colour.reaction.neutral
+						end
+					else
+						if (UnitFactionGroup("player") == UnitFactionGroup(argUnit)) then
+							return conf.colour.reaction.friend
+						elseif (UnitIsEnemy("player", argUnit)) then
+							return conf.colour.reaction.enemy
+						else
+							return conf.colour.reaction.neutral
+						end
+					end
 				end
 			end
-		end
-	end
+		else
+		
+		
+	 end
+			
 
 	return conf.colour.reaction.none
 end
@@ -3427,82 +3445,89 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 					end
 
 					local isPlayer
-					if (self.conf.buffs.bigpet) then
-						isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
+					if not IsRetail then
+						if (self.conf.buffs.bigpet) then
+							isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
+						else
+							isPlayer = unitCaster == "player" or unitCaster == "vehicle"
+						end
 					else
-						isPlayer = unitCaster == "player" or unitCaster == "vehicle"
+					 isPlayer = false
 					end
+					
+					
+     if not IsRetail then
+						if (icon and (((mine == 1) and (isPlayer or canStealOrPurge)) or ((mine == 2) and not (isPlayer or canStealOrPurge)))) then
+							local button = TPerl_GetBuffButton(self, buffIconIndex, 0, true, buffnum)
+							button.filter = filter
+							button:SetAlpha(1)
 
-					if (icon and (((mine == 1) and (isPlayer or canStealOrPurge)) or ((mine == 2) and not (isPlayer or canStealOrPurge)))) then
-						local button = TPerl_GetBuffButton(self, buffIconIndex, 0, true, buffnum)
-						button.filter = filter
-						button:SetAlpha(1)
+							buffs = buffs + 1
 
-						buffs = buffs + 1
-
-						button.icon:SetTexture(icon)
-						if (count > 1) then
-							button.count:SetText(count)
-							button.count:Show()
-						else
-							button.count:Hide()
-						end
-
-						-- Handle cooldowns
-						if (button.cooldown) then
-							if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
-								local start = expirationTime - duration
-								TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+							button.icon:SetTexture(icon)
+							if (count > 1) then
+								button.count:SetText(count)
+								button.count:Show()
 							else
-								button.cooldown:Hide()
-							end
-						end
-
-						button:Show()
-
-						if (canStealOrPurge) then --  and UnitCanAttack("player", partyid)
-							if (not button.steal) then
-								button.steal = CreateFrame("Frame", nil, button, BackdropTemplateMixin and "BackdropTemplate")
-								button.steal:SetPoint("TOPLEFT", -2, 2)
-								button.steal:SetPoint("BOTTOMRIGHT", 2, -2)
-
-								button.steal.tex = button.steal:CreateTexture(nil, "OVERLAY")
-								button.steal.tex:SetAllPoints()
-								button.steal.tex:SetTexture("Interface\\Addons\\TPerl\\Images\\StealMe")
-
-								local g = button.steal.tex:CreateAnimationGroup()
-								button.steal.anim = g
-								local r = g:CreateAnimation("Rotation")
-								g.rot = r
-
-								r:SetDuration(4)
-								r:SetDegrees(-360)
-								r:SetOrigin("CENTER", 0, 0)
-
-								g:SetLooping("REPEAT")
-								g:Play()
+								button.count:Hide()
 							end
 
-							button.steal:Show()
-							button.steal.anim:Play()
-							--button.steal:SetScript("OnUpdate", fixMeBlizzard) -- Workaround for Play not always working...
-						else
-							if (button.steal) then
-								button.steal:Hide()
+							-- Handle cooldowns
+							if (button.cooldown) then
+								if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
+									local start = expirationTime - duration
+									TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+								else
+									button.cooldown:Hide()
+								end
 							end
-						end
 
-						lastIcon = buffIconIndex
+							button:Show()
 
-						if ((self.conf.buffs.big and isPlayer) or (self.conf.buffs.bigStealable and canStealOrPurge)) then
-							buffsMine = buffsMine + 1
-							button.big = true
-							button:SetScale((self.conf.buffs.size * 2) / 32)
-						else
-							button.big = nil
-							button:SetScale(self.conf.buffs.size / 32)
+							if (canStealOrPurge) then --  and UnitCanAttack("player", partyid)
+								if (not button.steal) then
+									button.steal = CreateFrame("Frame", nil, button, BackdropTemplateMixin and "BackdropTemplate")
+									button.steal:SetPoint("TOPLEFT", -2, 2)
+									button.steal:SetPoint("BOTTOMRIGHT", 2, -2)
+
+									button.steal.tex = button.steal:CreateTexture(nil, "OVERLAY")
+									button.steal.tex:SetAllPoints()
+									button.steal.tex:SetTexture("Interface\\Addons\\TPerl\\Images\\StealMe")
+
+									local g = button.steal.tex:CreateAnimationGroup()
+									button.steal.anim = g
+									local r = g:CreateAnimation("Rotation")
+									g.rot = r
+
+									r:SetDuration(4)
+									r:SetDegrees(-360)
+									r:SetOrigin("CENTER", 0, 0)
+
+									g:SetLooping("REPEAT")
+									g:Play()
+								end
+
+								button.steal:Show()
+								button.steal.anim:Play()
+								--button.steal:SetScript("OnUpdate", fixMeBlizzard) -- Workaround for Play not always working...
+							else
+								if (button.steal) then
+									button.steal:Hide()
+								end
+							end
+
+							lastIcon = buffIconIndex
+
+							if ((self.conf.buffs.big and isPlayer) or (self.conf.buffs.bigStealable and canStealOrPurge)) then
+								buffsMine = buffsMine + 1
+								button.big = true
+								button:SetScale((self.conf.buffs.size * 2) / 32)
+							else
+								button.big = nil
+								button:SetScale(self.conf.buffs.size / 32)
+							end
+							buffIconIndex = buffIconIndex + 1
 						end
-						buffIconIndex = buffIconIndex + 1
 					end
 				end
 			end
@@ -3528,7 +3553,7 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 					if (UnitCanAttack("player", partyid)) then
 						break
 					end
-					-- Else we'll ignore this option for friendly targets, because it's unlikey
+					-- else we'll ignore this option for friendly targets, because it's unlikey
 					-- (except for PW:Shield and HoProtection) that we'll be debuffing friendlies
 				end
 
@@ -3543,11 +3568,17 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 						break
 					end
 
+
+     --print(partyid, UnitIsUnit(partyid, "pet"))
 					local isPlayer
-					if (self.conf.buffs.bigpet) then
-						isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
+					if not IsRetail then
+						if (self.conf.buffs.bigpet) then
+							isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
+						else
+							isPlayer = unitCaster == "player"
+						end
 					else
-						isPlayer = unitCaster == "player"
+					 isPlayer = false
 					end
 
 					if (icon and (((mine == 1) and isPlayer) or ((mine == 2) and not isPlayer))) then
@@ -3558,23 +3589,46 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 						debuffs = debuffs + 1
 
 						button.icon:SetTexture(icon)
-						if ((count or 0) > 1) then
-							button.count:SetText(count)
-							button.count:Show()
+						if not IsRetail then
+							if ((count or 0) > 1) then
+								button.count:SetText(count)
+								button.count:Show()
+							else
+								button.count:Hide()
+							end
 						else
-							button.count:Hide()
+						 if count then
+								button.count:SetText(count)
+								button.count:Show()
+							else
+								button.count:Hide()
+							end
 						end
 
-						local borderColor = DebuffTypeColor[(debuffType or "none")]
+						local borderColor
+      if not issecretvalue(debuffType) then
+ 						borderColor = DebuffTypeColor[(debuffType or "none")]
+						else
+						 borderColor = DebuffTypeColor["none"]
+						end
 						button.border:SetVertexColor(borderColor.r, borderColor.g, borderColor.b)
 
 						-- Handle cooldowns
 						if (button.cooldown) then
-							if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
-								local start = expirationTime - duration
-								TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+						 if not IsRetail then
+								if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
+									local start = expirationTime - duration
+									TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+								else
+									button.cooldown:Hide()
+								end
 							else
-								button.cooldown:Hide()
+							 if duration and expirationTime and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny) then
+									local start = expirationTime - duration
+									TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+								else
+									button.cooldown:Hide()
+								end
 							end
 						end
 
@@ -3814,32 +3868,67 @@ end
 
 -- TPerl_Unit_UpdatePortrait
 function TPerl_Unit_UpdatePortrait(self, force)
-	if (self.conf and self.conf.portrait) then
-		if self.conf.classPortrait then
-			local _, englishClass = UnitClass(self.partyid)
-			if UnitIsPlayer(self.partyid) and englishClass then
-				SetPortraitToTexture(self.portraitFrame.portrait, "Interface\\Icons\\ClassIcon_"..englishClass)
+	if not (self and self.conf and self.conf.portrait) then
+		return
+	end
+
+	-- Por seguridad en reloads: evita nils raros si portraitFrame aún no está creado
+	if not (self.portraitFrame and self.portraitFrame.portrait and self.portraitFrame.portrait3D) then
+		return
+	end
+
+	local portrait2D = self.portraitFrame.portrait
+	local portrait3D = self.portraitFrame.portrait3D
+
+	-- 2D portrait (o class icon)
+	if self.conf.classPortrait then
+		local _, englishClass = UnitClass(self.partyid)
+		if UnitIsPlayer(self.partyid) and englishClass then
+			local icon = "Interface\\Icons\\ClassIcon_" .. englishClass
+
+			-- Classic/Era: puede existir SetPortraitToTexture
+			-- Retail: no existe -> fallback a SetTexture
+			if SetPortraitToTexture then
+				SetPortraitToTexture(portrait2D, icon)
 			else
-				SetPortraitTexture(self.portraitFrame.portrait, self.partyid)
+				portrait2D:SetTexture(icon)
 			end
 		else
-			SetPortraitTexture(self.portraitFrame.portrait, self.partyid)
+			SetPortraitTexture(portrait2D, self.partyid)
 		end
-		-- If a player moves out of range for a 3D portrait, it will show their proper 2D one
-		if (self.conf.portrait3D and UnitIsVisible(self.partyid)) then
-			self.portraitFrame.portrait:Hide()
-			local guid = UnitGUID(self.partyid)
-			if force or guid ~= self.portraitFrame.portrait3D.guid or not self.portraitFrame.portrait3D:IsShown() then
-				self.portraitFrame.portrait3D:Show()
-				self.portraitFrame.portrait3D:ClearModel()
-				self.portraitFrame.portrait3D:SetUnit(self.partyid)
-				self.portraitFrame.portrait3D:SetPortraitZoom(1)
-				self.portraitFrame.portrait3D.guid = guid
+	else
+		SetPortraitTexture(portrait2D, self.partyid)
+	end
+
+	-- 3D portrait handling:
+	-- If a player moves out of range for a 3D portrait, it will show their proper 2D one
+	if (self.conf.portrait3D and UnitIsVisible(self.partyid)) then
+		portrait2D:Hide()
+
+		local guid = UnitGUID(self.partyid)
+
+		-- En Retail recargamos el modelo siempre que force o no esté mostrado
+		-- En no-Retail, usa también el guid para evitar trabajo extra
+		if not IsRetail then
+			if force or guid ~= portrait3D.guid or not portrait3D:IsShown() then
+				portrait3D:Show()
+				portrait3D:ClearModel()
+				portrait3D:SetUnit(self.partyid)
+				portrait3D:SetPortraitZoom(1)
+				portrait3D.guid = guid
 			end
 		else
-			self.portraitFrame.portrait:Show()
-			self.portraitFrame.portrait3D:Hide()
+			if force or guid ~= portrait3D.guid or not portrait3D:IsShown() then
+				portrait3D:Show()
+				portrait3D:ClearModel()
+				portrait3D:SetUnit(self.partyid)
+				portrait3D:SetPortraitZoom(1)
+				portrait3D.guid = guid
+			end
 		end
+	else
+		portrait2D:Show()
+		portrait3D:Hide()
 	end
 end
 
@@ -4540,7 +4629,7 @@ function TPerl_Unit_ThreatStatus(self, relative, immediate)
 			end
 
 			t.text:SetFormattedText("%d%%", scaledPercent)
-			local r, g, b = smoothColor(scaledPercent)
+			local r, g, b = smoothColor(scaledPercent, self.partyid)
 			t.text:SetTextColor(r, g, b)
 
 			t:Show()
