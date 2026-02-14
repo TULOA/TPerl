@@ -909,9 +909,11 @@ local function TPerl_Player_UpdateHealth(self)
 			greyMsg = TPERL_LOC_GHOST
 		elseif (UnitIsAFK("player") and conf.showAFK) then
 			greyMsg = CHAT_MSG_AFK
-		elseif (conf.showFD and C_UnitAuras.GetAuraDataBySpellName(partyid, feignDeath)) then
+		elseif (conf.showFD and C_Spell.GetSpellInfo(5384) and
+            C_UnitAuras.GetAuraDataBySpellName(partyid,C_Spell.GetSpellInfo(5384).name,"HELPFUL")) then
 			greyMsg = TPERL_LOC_FEIGNDEATHSHORT
-		elseif (C_UnitAuras.GetAuraDataBySpellName(partyid, 20711)) then
+		elseif (C_Spell.GetSpellInfo(20711) and
+            C_UnitAuras.GetAuraDataBySpellName(partyid,C_Spell.GetSpellInfo(20711).name,"HELPFUL")) then
 			greyMsg = TPERL_LOC_DEAD
 		end
 	end
