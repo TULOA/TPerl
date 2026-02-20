@@ -61,6 +61,49 @@ local tonumber = tonumber
 local tostring = tostring
 local type = type
 
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+-- Midnight/Retail: safe helpers for secret values (booleans/strings)
+local function TPerl_Raid_CanAccess(v)
+	if (v == nil) then
+		return false
+	end
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if (issecretvalue) then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or true
+	end
+	return true
+end
+
+local function TPerl_Raid_SafeBool(v)
+	-- Convert possibly-secret booleans into a safe Lua boolean.
+	if (not TPerl_Raid_CanAccess(v)) then
+		return false
+	end
+	local ok, res = pcall(function()
+		return (v and true or false)
+	end)
+	return ok and res or false
+end
+
+local function TPerl_Raid_SafeTableGet(t, k)
+	if (not t) then
+		return nil
+	end
+	if (not TPerl_Raid_CanAccess(k)) then
+		return nil
+	end
+	local ok, v = pcall(function()
+		return t[k]
+	end)
+	return ok and v or nil
+end
+
 local CreateFrame = CreateFrame
 local GetInventoryItemBroken = GetInventoryItemBroken
 local GetItemCount = GetItemCount
@@ -108,6 +151,25 @@ local TPerl_UnitDebuff = TPerl_UnitDebuff
 local TPerl_CheckDebuffs = TPerl_CheckDebuffs
 local TPerl_ColourFriendlyUnit = TPerl_ColourFriendlyUnit
 local TPerl_ColourHealthBar = TPerl_ColourHealthBar
+
+-- Midnight/Retail: some API returns can be "secret numbers".
+-- Avoid direct compares/arithmetic on those values (they can throw).
+local function _tperl_gt(a, b) return a > b end
+local function _tperl_lt(a, b) return a < b end
+local function _tperl_eq(a, b) return a == b end
+local function _tperl_add(a, b) return a + b end
+local function _tperl_sub(a, b) return a - b end
+local function _tperl_mul(a, b) return a * b end
+local function _tperl_div(a, b) return a / b end
+
+local function TPerl_SafeGT(a, b) local ok, r = pcall(_tperl_gt, a, b); if ok then return r end end
+local function TPerl_SafeLT(a, b) local ok, r = pcall(_tperl_lt, a, b); if ok then return r end end
+local function TPerl_SafeEQ(a, b) local ok, r = pcall(_tperl_eq, a, b); if ok then return r end end
+local function TPerl_SafeAdd(a, b) local ok, r = pcall(_tperl_add, a, b); if ok then return r end end
+local function TPerl_SafeSub(a, b) local ok, r = pcall(_tperl_sub, a, b); if ok then return r end end
+local function TPerl_SafeMul(a, b) local ok, r = pcall(_tperl_mul, a, b); if ok then return r end end
+local function TPerl_SafeDiv(a, b) local ok, r = pcall(_tperl_div, a, b); if ok then return r end end
+
 
 --local feignDeath = (C_Spell and C_Spell.GetSpellInfo(5384)) and C_Spell.GetSpellInfo(5384).name or GetSpellInfo(5384)
 --local spiritOfRedemption = (C_Spell and C_Spell.GetSpellInfo(27827)) and C_Spell.GetSpellInfo(27827).name or GetSpellInfo(27827)
@@ -448,7 +510,7 @@ local function TPerl_Raid_CheckFlags(partyid)
 
 	if (resser) then
 		-- Verify they're dead..
-		if (UnitIsDeadOrGhost(partyid)) then
+		if (TPerl_Raid_SafeBool(UnitIsDeadOrGhost(partyid))) then
 			return {flag = resser..TPERL_RAID_RESSING, bgcolor = {r = 0, g = 0.5, b = 1}}
 		end
 
@@ -457,7 +519,7 @@ local function TPerl_Raid_CheckFlags(partyid)
 
 	local unitInfo = TPerl_Roster[unitName]
 	if (unitInfo and unitInfo.ressed) then
-		if (UnitIsDead(partyid)) then
+		if (TPerl_Raid_SafeBool(UnitIsDead(partyid))) then
 			if (unitInfo.ressed == 2) then
 				return {flag = TPERL_LOC_SS_AVAILABLE, bgcolor = {r = 0, g = 1, b = 0.5}}
 			elseif (unitInfo.ressed == 3) then
@@ -470,7 +532,7 @@ local function TPerl_Raid_CheckFlags(partyid)
 			TPerl_Raid_UpdateManaType(FrameArray[partyid], true)
 		end
 	elseif (unitInfo and unitInfo.afk) then
-		if (UnitIsAFK(partyid)) then
+		if (TPerl_Raid_SafeBool(UnitIsAFK(partyid))) then
 			if (conf.showAFK) then
 				return {flag = TPERL_RAID_AFK}
 			end
@@ -478,7 +540,7 @@ local function TPerl_Raid_CheckFlags(partyid)
 			unitInfo.afk = nil
 		end
 	else
-		if (UnitIsAFK(partyid)) then
+		if (TPerl_Raid_SafeBool(UnitIsAFK(partyid))) then
 			if (conf.showAFK) then
 				return {flag = TPERL_RAID_AFK}
 			end
@@ -570,7 +632,7 @@ local function TPerl_Raid_UpdateHotsPrediction(self)
 end
 
 local function TPerl_Raid_UpdateResurrectionStatus(self)
-	if (UnitHasIncomingResurrection(self.partyid)) then
+	if (TPerl_Raid_SafeBool(UnitHasIncomingResurrection(self.partyid))) then
 		self.statsFrame.resurrect:Show()
 	else
 		self.statsFrame.resurrect:Hide()
@@ -584,12 +646,14 @@ local function TPerl_Raid_UpdateHealth(self)
 		return
 	end
 
-	local health = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid))
+	local isGhost = TPerl_Raid_SafeBool(UnitIsGhost(partyid))
+	local isDead = TPerl_Raid_SafeBool(UnitIsDead(partyid))
+	local health = (isGhost and 1) or (isDead and 0) or UnitHealth(partyid)
 	local healthmax = UnitHealthMax(partyid)
 
 	--[[if (health > healthmax) then
 		-- New glitch with 1.12.1
-		if (UnitIsDeadOrGhost(partyid)) then
+		if (TPerl_Raid_SafeBool(UnitIsDeadOrGhost(partyid))) then
 			health = 0
 		else
 			health = healthmax
@@ -598,7 +662,12 @@ local function TPerl_Raid_UpdateHealth(self)
 
 	self.statsFrame.healthBar:SetMinMaxValues(0, healthmax)
 	if (conf.bar.inverse) then
-		self.statsFrame.healthBar:SetValue(healthmax - health)
+		local inv = TPerl_SafeSub(healthmax, health)
+		if (inv ~= nil) then
+			self.statsFrame.healthBar:SetValue(inv)
+		else
+			self.statsFrame.healthBar:SetValue(health)
+		end
 	else
 		self.statsFrame.healthBar:SetValue(health)
 	end
@@ -619,7 +688,7 @@ local function TPerl_Raid_UpdateHealth(self)
 		name = name.."-"..realm
 	end
 	local myRoster = TPerl_Roster[name]
-	if (name and UnitIsConnected(partyid)) then
+	if (name and TPerl_Raid_SafeBool(UnitIsConnected(partyid))) then
 		--self.disco = nil
 		--[[if (self.feigning and not UnitBuff(partyid, feignDeath)) then
 			self.feigning = nil
@@ -629,7 +698,7 @@ local function TPerl_Raid_UpdateHealth(self)
 		if (flags) then
 			TPerl_Raid_ShowFlags(self, flags)
 
-			if (UnitIsDeadOrGhost(partyid)) then
+			if (TPerl_Raid_SafeBool(UnitIsDeadOrGhost(partyid))) then
 				self.dead = true
 				TPerl_Raid_UpdateName(self)
 			end
@@ -643,11 +712,11 @@ local function TPerl_Raid_UpdateHealth(self)
 			self.dead = true
 			TPerl_Raid_ShowFlags(self, TPERL_LOC_DEAD)
 			TPerl_Raid_UpdateName(self)--]]
-		elseif (UnitIsDead(partyid)) then
+		elseif (TPerl_Raid_SafeBool(UnitIsDead(partyid))) then
 			self.dead = true
 			TPerl_Raid_ShowFlags(self, TPERL_LOC_DEAD)
 			TPerl_Raid_UpdateName(self)
-		elseif (UnitIsGhost(partyid)) then
+		elseif (TPerl_Raid_SafeBool(UnitIsGhost(partyid))) then
 			self.dead = true
 			TPerl_Raid_ShowFlags(self, TPERL_LOC_GHOST)
 			TPerl_Raid_UpdateName(self)
@@ -657,36 +726,92 @@ local function TPerl_Raid_UpdateHealth(self)
 			end
 			self.dead = nil
 
-			-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
+			-- Begin 4.3 division by 0 work around (also protect against secret numbers)
 			local percentHp
-			if health > 0 and healthmax == 0 then -- We have current hp but max hp failed.
-				healthmax = health -- Make max hp at least equal to current health
-				percentHp = 1 -- And percent 100% cause a number divided by itself is 1, duh.
-			elseif health == 0 and healthmax == 0 then -- Probably dead target
-				percentHp = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+			local gt0 = TPerl_SafeGT(health, 0)
+			local cur0 = TPerl_SafeEQ(health, 0)
+			local max0 = TPerl_SafeEQ(healthmax, 0)
+			if gt0 and max0 then -- We have current hp but max hp failed.
+				healthmax = health
+				percentHp = 1
+			elseif cur0 and max0 then -- Probably dead target
+				percentHp = 0
 			else
-				percentHp = health / healthmax -- Everything is dandy, so just do it right way.
+				percentHp = TPerl_SafeDiv(health, healthmax)
 			end
 			--end division by 0 check
-			if (rconf.healerMode.enable) then
-				self.statsFrame.healthBar.text:SetText(-(healthmax - health))
-			else
-				if rconf.values then
-					self.statsFrame.healthBar.text:SetFormattedText("%d/%d", health, healthmax)
-				elseif rconf.precisionPercent then
-					self.statsFrame.healthBar.text:SetFormattedText(perc1F, percentHp == 1 and 100 or percentHp * 100 + 0.05)
+
+			if (percentHp) then
+				if (rconf.healerMode.enable) then
+					local diff = TPerl_SafeSub(healthmax, health)
+					local neg = diff and TPerl_SafeMul(diff, -1)
+					self.statsFrame.healthBar.text:SetText(neg or "")
 				else
-					local show = percentHp * 100
-					if show < 10 then
-						self.statsFrame.healthBar.text:SetFormattedText(perc1F or "%.1f%%", percentHp == 1 and 100 or percentHp * 100 + 0.05)
+					if rconf.values then
+						local ok = pcall(self.statsFrame.healthBar.text.SetFormattedText, self.statsFrame.healthBar.text, "%d/%d", health, healthmax)
+						if not ok then
+							self.statsFrame.healthBar.text:SetText("")
+						end
+					elseif rconf.precisionPercent then
+						local pct = TPerl_SafeMul(percentHp, 100)
+						if pct then
+							local v
+							if TPerl_SafeEQ(percentHp, 1) then
+								v = 100
+							else
+								v = TPerl_SafeAdd(pct, 0.05)
+							end
+							if v then
+								local ok = pcall(self.statsFrame.healthBar.text.SetFormattedText, self.statsFrame.healthBar.text, perc1F, v)
+								if not ok then self.statsFrame.healthBar.text:SetText("") end
+							else
+								self.statsFrame.healthBar.text:SetText("")
+							end
+						else
+							self.statsFrame.healthBar.text:SetText("")
+						end
 					else
-						self.statsFrame.healthBar.text:SetFormattedText(percD or "%d%%", percentHp == 1 and 100 or percentHp * 100 + 0.5)
+						local pct = TPerl_SafeMul(percentHp, 100)
+						if pct then
+							local lt10 = TPerl_SafeLT(pct, 10)
+							if lt10 then
+								local v
+								if TPerl_SafeEQ(percentHp, 1) then
+									v = 100
+								else
+									v = TPerl_SafeAdd(pct, 0.05)
+								end
+								if v then
+									local ok = pcall(self.statsFrame.healthBar.text.SetFormattedText, self.statsFrame.healthBar.text, perc1F or "%.1f%%", v)
+									if not ok then self.statsFrame.healthBar.text:SetText("") end
+								else
+									self.statsFrame.healthBar.text:SetText("")
+								end
+							else
+								local v
+								if TPerl_SafeEQ(percentHp, 1) then
+									v = 100
+								else
+									v = TPerl_SafeAdd(pct, 0.5)
+								end
+								if v then
+									local ok = pcall(self.statsFrame.healthBar.text.SetFormattedText, self.statsFrame.healthBar.text, percD or "%d%%", v)
+									if not ok then self.statsFrame.healthBar.text:SetText("") end
+								else
+									self.statsFrame.healthBar.text:SetText("")
+								end
+							end
+						else
+							self.statsFrame.healthBar.text:SetText("")
+						end
 					end
 				end
-			end
 
-			-- TPerl_SetSmoothBarColor(self.statsFrame.healthBar, percentHp)
-			TPerl_ColourHealthBar(self, percentHp, partyid)
+				-- TPerl_SetSmoothBarColor(self.statsFrame.healthBar, percentHp)
+				TPerl_ColourHealthBar(self, percentHp, partyid)
+			else
+				self.statsFrame.healthBar.text:SetText("")
+			end
 
 			if (self.statsFrame.greyMana) then
 				self.statsFrame.greyMana = nil
@@ -729,24 +854,39 @@ local function TPerl_Raid_UpdateMana(self)
 
 		if (rconf.manaPercent and TPerl_GetDisplayedPowerType(partyid) == 0 and not self.pet) then
 			if (rconf.values) then -- TODO rconf.manavalues
-				self.statsFrame.manaBar.text:SetFormattedText("%d/%d", mana, manamax)
+				local ok = pcall(self.statsFrame.manaBar.text.SetFormattedText, self.statsFrame.manaBar.text, "%d/%d", mana, manamax)
+				if not ok then self.statsFrame.manaBar.text:SetText("") end
 			else
-				--Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
+				--Begin 4.3 division by 0 work around (also protect against secret numbers)
 				local pmanaPct
-				if mana > 0 and manamax == 0 then -- We have current mana but max mana failed.
-					manamax = mana -- Make max mana at least equal to current health
-					pmanaPct = 1 -- And percent 100% cause a number divided by itself is 1, duh.
-				elseif mana == 0 and manamax == 0 then--Probably doesn't use mana or is oom?
-					pmanaPct = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
+				local gt0 = TPerl_SafeGT(mana, 0)
+				local cur0 = TPerl_SafeEQ(mana, 0)
+				local max0 = TPerl_SafeEQ(manamax, 0)
+				if gt0 and max0 then
+					manamax = mana
+					pmanaPct = 1
+				elseif cur0 and max0 then
+					pmanaPct = 0
 				else
-					pmanaPct = mana / manamax -- Everything is dandy, so just do it right way.
+					pmanaPct = TPerl_SafeDiv(mana, manamax)
 				end
 				-- end division by 0 check
 
-				if rconf.precisionManaPercent then
-					self.statsFrame.manaBar.text:SetFormattedText(perc1F, pmanaPct * 100)
+				if (pmanaPct) then
+					local pct = TPerl_SafeMul(pmanaPct, 100)
+					if pct then
+						if rconf.precisionManaPercent then
+							local ok = pcall(self.statsFrame.manaBar.text.SetFormattedText, self.statsFrame.manaBar.text, perc1F, pct)
+							if not ok then self.statsFrame.manaBar.text:SetText("") end
+						else
+							local ok = pcall(self.statsFrame.manaBar.text.SetFormattedText, self.statsFrame.manaBar.text, percD, pct)
+							if not ok then self.statsFrame.manaBar.text:SetText("") end
+						end
+					else
+						self.statsFrame.manaBar.text:SetText("")
+					end
 				else
-					self.statsFrame.manaBar.text:SetFormattedText(percD, pmanaPct * 100)
+					self.statsFrame.manaBar.text:SetText("")
 				end
 			end
 		else
@@ -1048,12 +1188,12 @@ local function TPerl_Raid_UpdateCombat(self)
 	if not partyid then
 		return
 	end
-	if UnitExists(partyid) and UnitAffectingCombat(partyid) then
+	if TPerl_Raid_SafeBool(UnitExists(partyid)) and TPerl_Raid_SafeBool(UnitAffectingCombat(partyid)) then
 		self.nameFrame.combatIcon:Show()
 	else
 		self.nameFrame.combatIcon:Hide()
 	end
-	if UnitIsVisible(partyid) and UnitIsCharmed(partyid) and UnitIsPlayer(partyid) and (not IsClassic and not UnitUsingVehicle(partyid) or true) then
+	if TPerl_Raid_SafeBool(UnitIsVisible(partyid)) and TPerl_Raid_SafeBool(UnitIsCharmed(partyid)) and TPerl_Raid_SafeBool(UnitIsPlayer(partyid)) and (IsClassic or not TPerl_Raid_SafeBool(UnitUsingVehicle(partyid))) then
 		self.nameFrame.warningIcon:Show()
 	else
 		self.nameFrame.warningIcon:Hide()
@@ -1078,13 +1218,13 @@ local function TPerl_Raid_UpdatePlayerFlags(self, partyid, ...)
 			local unitInfo = TPerl_Roster[unitName]
 			if (unitInfo) then
 				local change
-				if (UnitIsAFK(partyid)) then
+				if (TPerl_Raid_SafeBool(UnitIsAFK(partyid))) then
 					if (not unitInfo.afk) then
 						change = true
 						unitInfo.afk = GetTime()
 						unitInfo.dnd = nil
 					end
-				elseif (UnitIsDND(partyid)) then
+				elseif (TPerl_Raid_SafeBool(UnitIsDND(partyid))) then
 					if (not unitInfo.dnd) then
 						change = true
 						unitInfo.dnd = GetTime()
@@ -1733,19 +1873,19 @@ function TPerl_Raid_Events:UNIT_SPELLCAST_START(unit, lineGUID, spellID)
 	if realm and realm ~= "" then
 		unitName = unitName.."-"..realm
 	end
-	if (ResArray[unitName]) then
+	if (TPerl_Raid_SafeTableGet(ResArray, unitName)) then
 		-- Flagged as ressing, finish their old cast
 		SetResStatus(unitName)
 	end
 
 	local name, text, texture, startTime, endTime, isTradeSkill = UnitCastingInfo(unit)
-	if (resSpells[name]) then
+	if (TPerl_Raid_SafeTableGet(resSpells, name)) then
 		local u = unit.."target"
 		local unitTargetName, realm = UnitName(u)
 		if realm and realm ~= "" then
 			unitTargetName = unitTargetName.."-"..realm
 		end
-		if (UnitExists(u) and UnitIsDead(u)) then
+		if (TPerl_Raid_SafeBool(UnitExists(u)) and TPerl_Raid_SafeBool(UnitIsDead(u))) then
 			SetResStatus(unitName, unitTargetName)
 		end
 	end
@@ -2038,8 +2178,8 @@ function SetRaidRoster()
 			if (r) then
 				NewRoster[name] = r
 				TPerl_Roster[name] = nil
-				r.afk = UnitIsAFK(unit) and GetTime() or nil
-				r.dnd = UnitIsDND(unit) and GetTime() or nil
+				r.afk = TPerl_Raid_SafeBool(UnitIsAFK(unit)) and GetTime() or nil
+				r.dnd = TPerl_Raid_SafeBool(UnitIsDND(unit)) and GetTime() or nil
 			else
 				--NewRoster = new()
 				NewRoster[name] = { }
@@ -2342,10 +2482,10 @@ local function GetCombatRezzerList()
 		local unit = "raid"..i
 		local _, class = UnitClass(unit)
 		if (normalRezzers[class]) then
-			if (UnitAffectingCombat(unit)) then
+			if (TPerl_Raid_SafeBool(UnitAffectingCombat(unit))) then
 				anyCombat = anyCombat + 1
 			end
-			if (not UnitIsDeadOrGhost(unit) and UnitIsConnected(unit)) then
+			if ((not TPerl_Raid_SafeBool(UnitIsDeadOrGhost(unit))) and TPerl_Raid_SafeBool(UnitIsConnected(unit))) then
 				anyAlive = anyAlive + 1
 			end
 		end
@@ -2358,11 +2498,11 @@ local function GetCombatRezzerList()
 
 		for i = 1, GetNumGroupMembers() do
 			local raidid = "raid"..i
-			if (not UnitIsDeadOrGhost(raidid) and UnitIsVisible(raidid)) then
+			if ((not TPerl_Raid_SafeBool(UnitIsDeadOrGhost(raidid))) and TPerl_Raid_SafeBool(UnitIsVisible(raidid))) then
 				local name, _, _, _, _, fileName = GetRaidRosterInfo(i)
 
 				local good
-				if (not UnitAffectingCombat(raidid)) then
+				if (not TPerl_Raid_SafeBool(UnitAffectingCombat(raidid))) then
 					if (fileName == "PRIEST" or fileName == "SHAMAN" or fileName == "PALADIN" or fileName == "MONK") then
 						tinsert(ret, {["name"] = name, class = fileName, cd = 0})
 					end
@@ -2442,13 +2582,13 @@ function TPerl_RaidTipExtra(unitid)
 				GameTooltip:AddLine("CTRA "..stats.version, 1, 1, 1)
 			end
 
-			if (stats.offline and UnitIsConnected(unitid)) then
+			if (stats.offline and TPerl_Raid_SafeBool(UnitIsConnected(unitid))) then
 				stats.offline = nil
 			end
-			if (stats.afk and not UnitIsAFK(unitid)) then
+			if (stats.afk and (not TPerl_Raid_SafeBool(UnitIsAFK(unitid)))) then
 				stats.afk = nil
 			end
-			if (stats.dnd and not UnitIsDND(unitid)) then
+			if (stats.dnd and (not TPerl_Raid_SafeBool(UnitIsDND(unitid)))) then
 				stats.dnd = nil
 			end
 
@@ -2462,7 +2602,7 @@ function TPerl_RaidTipExtra(unitid)
 				GameTooltip:AddLine(format(TPERL_RAID_TOOLTIP_DND, SecondsToTime(t - stats.dnd)))
 
 			elseif (stats.fd) then
-				if (not UnitIsDead(unitid)) then
+				if (not TPerl_Raid_SafeBool(UnitIsDead(unitid))) then
 					stats.fd = nil
 				else
 					local x = stats.fd + 360 - t
@@ -2494,7 +2634,7 @@ function TPerl_RaidTipExtra(unitid)
 				end
 			end
 
-			if (UnitIsDeadOrGhost(unitid) --[[and not UnitBuff(unitid, feignDeath)--]]) then
+			if (TPerl_Raid_SafeBool(UnitIsDeadOrGhost(unitid)) --[[and not UnitBuff(unitid, feignDeath)--]]) then
 				if (stats.resCount) then
 					GameTooltip:AddLine(TPERL_LOC_RESURRECTED.." x"..stats.resCount)
 				end
@@ -2619,31 +2759,13 @@ local function GroupFilter(n)
 		end
 		return ""
 	else
-		local f
-		if (rconf.group[n]) then
-			f = tostring(n)
-		end
-
-		local invalid
-		for i = 1, CLASS_COUNT do
-			if (not rconf.class[i]) then
-				invalid = true
+			-- In group mode the SecureRaidGroupHeaderTemplate expects groupFilter to be a group number
+			-- ("1".."8"). Including class names here can result in empty/duplicated units in
+			-- Midnight's restricted environment.
+			if (rconf.group and rconf.group[n]) then
+				return tostring(n)
 			end
-		end
-		if (invalid) then
-			rconf.class = DefaultRaidClasses()
-		end
-
-		for i = 1, CLASS_COUNT do
-			if (rconf.class[i].enable) then
-				if (not f) then
-					f = rconf.class[i].name
-				else
-					f = f..","..rconf.class[i].name
-				end
-			end
-		end
-		return f
+			return ""
 	end
 end
 
@@ -2656,6 +2778,30 @@ function TPerl_Raid_ChangeAttributes()
 
 	rconf.anchor = (rconf and rconf.anchor) or "TOP"
 	local GROUP_COUNT = 8
+
+		-- Ensure filter tables are valid so raid headers don't end up with empty/invalid filters
+		if (not rconf.group) then
+			rconf.group = {}
+		end
+		for i = 1, GROUP_COUNT do
+			if (rconf.group[i] == nil) then
+				rconf.group[i] = true
+			end
+		end
+		local invalidClass
+		if (not rconf.class) then
+			invalidClass = true
+		else
+			for i = 1, CLASS_COUNT do
+				if (not rconf.class[i]) then
+					invalidClass = true
+					break
+				end
+			end
+		end
+		if (invalidClass) then
+			rconf.class = DefaultRaidClasses()
+		end
 	for i = 1, rconf.sortByClass and GROUP_COUNT or 8 do
 		local groupHeader = raidHeaders[i]
 
@@ -2675,12 +2821,33 @@ function TPerl_Raid_ChangeAttributes()
 			--groupHeader:SetAttribute("toggleForVehicle", true)
 			--groupHeader:SetAttribute("allowVehicleTarget", true)
 		else
-			groupHeader:SetAttribute("strictFiltering", not rconf.sortByClass)
-			groupHeader:SetAttribute("groupFilter", GroupFilter(i))
-			groupHeader:SetAttribute("groupBy", nil)
-			groupHeader:SetAttribute("groupingOrder", nil)
+			-- Default layout (no sort by role): one secure header per raid group.
+			--
+			-- Midnight note:
+			-- On this client, clearing groupBy can result in headers that render only the title
+			-- (no child unit buttons), while sortByRole works because it sets groupBy.
+			-- To keep the classic TPerl layout (Grp1..Grp8) stable, explicitly group by GROUP and
+			-- provide a valid groupingOrder.
+			--
+			-- We keep sortByClass behavior separate (it uses class tokens in groupFilter).
+			if (not rconf.sortByClass) then
+				-- Always use the group number as a stable filter/order token.
+				-- Even if the user disables a group, it will be hidden by TPerl_Raid_HideShowRaid.
+				local gf = tostring(i)
+				groupHeader:SetAttribute("groupBy", "GROUP")
+				groupHeader:SetAttribute("groupingOrder", gf)
+				groupHeader:SetAttribute("groupFilter", gf)
+				groupHeader:SetAttribute("strictFiltering", true)
+			else
+				groupHeader:SetAttribute("groupBy", nil)
+				groupHeader:SetAttribute("groupingOrder", nil)
+				groupHeader:SetAttribute("groupFilter", GroupFilter(i))
+				groupHeader:SetAttribute("strictFiltering", nil)
+			end
+
 			groupHeader:SetAttribute("startingIndex", 1)
-			groupHeader:SetAttribute("unitsPerColumn", nil)
+			-- Midnight/Retail: unitsPerColumn is not reliably defaulted when omitted.
+			groupHeader:SetAttribute("unitsPerColumn", 5)
 			--groupHeader:SetAttribute("useparent-toggleForVehicle", true)
 			--groupHeader:SetAttribute("useparent-allowVehicleTarget", true)
 			--groupHeader:SetAttribute("useparent-unitsuffix", true)

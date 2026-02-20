@@ -558,7 +558,7 @@ function CustomHighlight:Check(frame, unit)
 		for i = 1, 40 do
 			local name, icon
 			if not IsVanillaClassic and C_UnitAuras then
-				local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
+				local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HARMFUL")
 				if auraData then
 					name = auraData.name
 					icon = auraData.icon

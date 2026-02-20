@@ -12263,7 +12263,10 @@
 									end
 									if (TPerl_Custom) then
 										TPerl_Custom:PLAYER_ENTERING_WORLD()
-										if not TPerlDB.raid.enable or not TPerlDB.custom.enable then
+											-- TPerlDB.custom is created lazily (e.g. when the custom config UI is shown).
+											-- In Midnight/Retail we can hit this path before that, so guard it.
+											local customEnabled = (TPerlDB.custom and TPerlDB.custom.enable)
+											if not TPerlDB.raid.enable or not customEnabled then
 											TPerl_Custom:ClearAll()
 										end
 									end
@@ -13565,7 +13568,8 @@
 											end
 											if (TPerl_Custom) then
 												TPerl_Custom:PLAYER_ENTERING_WORLD()
-												if not TPerlDB.custom.enable then
+													-- Ensure custom DB exists before accessing it (created lazily elsewhere)
+													if not (TPerlDB.custom and TPerlDB.custom.enable) then
 													TPerl_Custom:ClearAll()
 												end
 											end

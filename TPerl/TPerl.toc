@@ -1,5 +1,5 @@
 ## Interface: 11508, 120000, 50503, 20505
-## Version: 1.2.7
+## Version: 1.2.6
 ## X-Revision: 1
 ## Author: TULOA
 ## Title: TPerl UnitFrames

@@ -19,6 +19,7 @@ local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 
 local pairs = pairs
 local strfind = strfind
+local pcall = pcall
 
 local CreateFrame = CreateFrame
 local GetNumGroupMembers = GetNumGroupMembers
@@ -174,7 +175,8 @@ local function TPerl_RaidPets_UpdateHealth(self)
 		end
 	end
 
-	if (health > healthmax) then
+	local okClamp, needClamp = pcall(function(a, b) return a > b end, health, healthmax)
+	if okClamp and needClamp then
 		-- New glitch with 1.12.1
 		if (UnitIsDeadOrGhost(partyid)) then
 			health = 0
@@ -185,11 +187,17 @@ local function TPerl_RaidPets_UpdateHealth(self)
 
 	self.healthBar:SetMinMaxValues(0, healthmax)
 	if (conf.bar.inverse) then
-		self.healthBar:SetValue(healthmax - health)
+		local okInv, inv = pcall(function(a, b) return a - b end, healthmax, health)
+		if okInv then
+			self.healthBar:SetValue(inv)
+		else
+			self.healthBar:SetValue(health)
+		end
 	else
 		self.healthBar:SetValue(health)
 	end
-	TPerl_SetSmoothBarColor(self.healthBar, health / healthmax)
+	local okPct, pct = pcall(function(a, b) return a / b end, health, healthmax)
+	TPerl_SetSmoothBarColor(self.healthBar, (okPct and pct) or 0)
 
 	if (UnitIsDead(partyid)) then
 		self.healthBar.text:SetText(TPERL_LOC_DEAD)
@@ -199,7 +207,12 @@ local function TPerl_RaidPets_UpdateHealth(self)
 		if (healthmax == 0) then
 			self.healthBar.text:SetText("")
 		else
-			self.healthBar.text:SetFormattedText("%.0f%%", health / healthmax * 100)
+			local okPct, pct = pcall(function(a, b) return (a / b) * 100 end, health, healthmax)
+			if okPct and pct then
+				self.healthBar.text:SetFormattedText("%.0f%%", pct)
+			else
+				self.healthBar.text:SetText("")
+			end
 		end
 	end
 

@@ -9,6 +9,33 @@ end, "$Revision:  $")
 
 local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 
+-- Midnight/Retail "secret value" helpers
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+-- UnitIsUnit can return a secret boolean under tainted execution in Retail/Midnight.
+-- Never test it directly in an if(). Instead, convert it to a safe boolean.
+local function TPerl_RH_UnitIsUnit(unit1, unit2)
+    local r = UnitIsUnit(unit1, unit2)
+
+    if IsRetail then
+        if canaccessvalue then
+            local ok, can = pcall(canaccessvalue, r)
+            if (not ok) or (not can) then
+                return false
+            end
+        elseif issecretvalue then
+            local ok, issec = pcall(issecretvalue, r)
+            if ok and issec then
+                return false
+            end
+        end
+    end
+
+    -- r is now known to be non-secret (or we're on non-retail clients where secret values don't exist).
+    return r and true or false
+end
+
 local myClass
 local playerAggro, petAggro
 local doUpdate					-- In cases where we get multiple UNIT_TARGET events in 1 frame, we just set a flag and do during OnUpdate
@@ -291,7 +318,7 @@ local function MakeFriendlyUnitList()
 			name, petname = prefix..i, prefix.."pet"..i
 		end
 
-		if (not UnitIsUnit(name, "player")) then
+		if (not TPerl_RH_UnitIsUnit(name, "player")) then
 			if (UnitExists(name)) then
 				tinsert(friendlyUnitList, name)
 			end
@@ -304,7 +331,7 @@ end
 
 -- Events
 function TPerl_Assists_OnEvent(self, event, unit)
-	if (event == "PLAYER_TARGET_CHANGED" or (event == "UNIT_TARGET" and not UnitIsUnit(unit, "player"))) then
+	if (event == "PLAYER_TARGET_CHANGED" or (event == "UNIT_TARGET" and not TPerl_RH_UnitIsUnit(unit, "player"))) then
 		doUpdate = true
 	elseif (event == "VARIABLES_LOADED") then
 		MakeFriendlyUnitList()
@@ -372,7 +399,7 @@ local targetting
 -- TPerl_FoundEnemyBefore
 local function TPerl_FoundEnemyBefore(FoundEnemy, name)
 	for previous in pairs(FoundEnemy) do
-		if (UnitIsUnit(previous.."target", name.."target")) then
+		if (TPerl_RH_UnitIsUnit(previous.."target", name.."target")) then
 			return true
 		end
 	end
@@ -387,15 +414,17 @@ local function TPerl_AddEnemy(anyEnemy, FoundEnemy, name)
 		if (UnitExists(namet)) then
 			wholeEnemyUnitList[name] = true
 
-			if (TPerl_Highlight and conf and conf.highlight.AGGRO) then
-				if (UnitInRaid(namett) or UnitInParty(namett)) then
-					currentPlayerAggro[UnitName(namett)] = UnitGUID(namett)
+				if (TPerl_Highlight and conf and conf.highlight.AGGRO) then
+					if (UnitInRaid(namett) or UnitInParty(namett)) then
+						-- Midnight/Retail: UnitName() may be a secret string and cannot be used as a table key.
+						-- Use stable unit tokens as keys instead.
+						currentPlayerAggro[namett] = UnitGUID(namett)
+					end
 				end
-			end
 		end
 	end
 
-	if (UnitIsUnit("player", namett)) then
+	if (TPerl_RH_UnitIsUnit("player", namett)) then
 		if (not TPerl_FoundEnemyBefore(FoundEnemy, name)) then
 			if (not playerAggro and TPerlConfigHelper.AggroWarning == 1) then
 				playerAggro = true
@@ -412,7 +441,7 @@ local function TPerl_AddEnemy(anyEnemy, FoundEnemy, name)
 			return true
 		end
 	-- 1.8.3 Added check to see if mob is targetting our target, and add to that list
-	elseif (UnitExists("target") and UnitIsUnit("target", namett)) then
+	elseif (UnitExists("target") and TPerl_RH_UnitIsUnit("target", namett)) then
 		-- We can still use the FoundEnemy list, because it's not too important if
 		-- we're targetting ourself and the mob doesn't show on both self and target lists
 		if (not TPerl_FoundEnemyBefore(FoundEnemy, name)) then
@@ -424,7 +453,7 @@ local function TPerl_AddEnemy(anyEnemy, FoundEnemy, name)
 			tinsert(assists, {UnitName(namet), ""})
 			return true
 		end
-	elseif (not petAggro and TPerlConfigHelper.AggroWarning == 1 and UnitExists(namett) and UnitIsUnit("pet", namett)) then
+	elseif (not petAggro and TPerlConfigHelper.AggroWarning == 1 and UnitExists(namett) and TPerl_RH_UnitIsUnit("pet", namett)) then
 		petAggro = true
 		--petFadeStart = GetTime()
 		TPerl_AggroPet:Show()
@@ -504,7 +533,7 @@ function TPerl_UpdateAssists()
 			local _, engClass = UnitClass(name)
 
 			if (targetname) then
-				if (UnitIsUnit("target", name.."target")) then
+				if (TPerl_RH_UnitIsUnit("target", name.."target")) then
 					assistCount = assistCount + 1
 					--local n = TPerl_GetReusableTable()
 					--[[local n = { }
@@ -517,7 +546,7 @@ function TPerl_UpdateAssists()
 
 			-- 0 for Anyone, 1 for Healers
 			if (not selfFlag or HealerClasses[engClass]) then
-				if (UnitIsUnit("player", name.."target")) then
+				if (TPerl_RH_UnitIsUnit("player", name.."target")) then
 					targettingCount = targettingCount + 1
 					--local n = TPerl_GetReusableTable()
 					--[[local n = { }
@@ -542,10 +571,11 @@ function TPerl_UpdateAssists()
 
 	if (enemyFlag) then
 		if (not UnitIsFriend("player", "focus")) then
-			if (UnitIsUnit("player", "focustarget")) then
-				if (TPerl_Highlight and conf and conf.highlight.AGGRO) then
-					currentPlayerAggro[UnitName("player")] = UnitGUID("player")
-				end
+			if (TPerl_RH_UnitIsUnit("player", "focustarget")) then
+					if (TPerl_Highlight and conf and conf.highlight.AGGRO) then
+						-- Midnight/Retail: do not key tables by UnitName() (can be a secret string).
+						currentPlayerAggro["player"] = UnitGUID("player")
+					end
 
 				if (not TPerl_FoundEnemyBefore(FoundEnemy, "focus")) then
 					if (not playerAggro and TPerlConfigHelper.AggroWarning == 1) then

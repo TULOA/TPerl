@@ -109,46 +109,6 @@ local function TPerl_Party_CanAccess(v)
 	return okNil and (not isNil)
 end
 
-local function TPerl_Party_SafeBool(v)
-	-- Convert possibly-secret booleans into a safe Lua boolean.
-	if (not IsRetail) then
-		return (v and true or false)
-	end
-	if (not TPerl_Party_CanAccess(v)) then
-		return false
-	end
-	local ok, res = pcall(function()
-		return (v and true or false)
-	end)
-	return ok and res or false
-end
-
-
-local function TPerl_Party_TrySetPowerBar(bar, curVal, maxVal)
-	if (not bar) then
-		return false
-	end
-	if (not IsRetail) then
-		bar:SetMinMaxValues(0, maxVal or 0)
-		bar:SetValue(curVal or 0)
-		return true
-	end
-	-- Midnight/Retail: UnitPower values can be "secret". Some UI methods accept them, some don't.
-	-- Try to paint the bar without doing comparisons/arithmetics on the values.
-	local ok = pcall(bar.SetMinMaxValues, bar, 0, maxVal)
-	if ok then
-		ok = pcall(bar.SetValue, bar, curVal)
-	end
-	if not ok then
-		-- Fallback to a safe empty bar
-		pcall(bar.SetMinMaxValues, bar, 0, 1)
-		pcall(bar.SetValue, bar, 0)
-		return false
-	end
-	return true
-end
-
-
 local CombatFeedback_Initialize = CombatFeedback_Initialize
 local CombatFeedback_OnCombatEvent = CombatFeedback_OnCombatEvent
 local CombatFeedback_OnUpdate = CombatFeedback_OnUpdate
@@ -274,13 +234,7 @@ end
 -- onAttrChanged
 local function onAttrChanged(self, name, value)
 	if (name == "unit") then
-		-- Retail/Midnight: SecureGroupHeader can briefly report "party0" during reconfig.
-		-- If showPlayer is disabled, treating "party0" as a real unit will cause frames to
-		-- lose their unit binding and stop receiving aura updates. Ignore this transient value.
-		if IsRetail and value == "party0" then
-			return
-		end
-		if (value) then
+		if (value and value ~= "party0") then
 			SetFrameArray(self, value)
 			if (self.partyid ~= value or self.lastName ~= UnitName(value) or self.lastGUID ~= UnitGUID(value)) then
 				if (conf) then
@@ -536,13 +490,13 @@ end
 -- TPerl_Party_UpdatePlayerFlags(self)
 local function TPerl_Party_UpdatePlayerFlags(self)
 	local change
-	if (TPerl_Party_SafeBool(UnitIsAFK(self.partyid)) and conf.showAFK) then
+	if (UnitIsAFK(self.partyid) and conf.showAFK) then
 		if (not self.afk) then
 			change = true
 			self.afk = GetTime()
 			self.dnd = nil
 		end
-	elseif (TPerl_Party_SafeBool(UnitIsDND(self.partyid))) then
+	elseif (UnitIsDND(self.partyid)) then
 		if (self.afk) then
 			change = true
 			self.afk = nil
@@ -684,17 +638,17 @@ end
 
 -- TPerl_Party_BuffPositions
 local function TPerl_Party_BuffPositions(self)
-	-- NOTE: Party buff buttons can lose their anchors when layout/config refreshes
-	-- (e.g. opening and closing the options window). If we only re-position when
-	-- wrap is enabled, icons may end up with no points and appear to "disappear"
-	-- until a full client restart recreates them. Always re-position here.
 	if (self.conf) then
 		if (pconf.debuffs.below) then
-			TPerl_Unit_BuffPositions(self, self.buffFrame.buff, self.buffFrame.debuff, self.conf.buffs.size, self.conf.debuffs.size)
+			if (pconf.buffs.wrap) then
+				TPerl_Unit_BuffPositions(self, self.buffFrame.buff, self.buffFrame.debuff, self.conf.buffs.size, self.conf.debuffs.size)
+			end
 		else
-			-- Debuffs handled separately by legacy code, so just do buffs here
-			TPerl_Unit_BuffPositions(self, self.buffFrame.buff, nil, self.conf.buffs.size)
-			if (pconf.debuffs.enable) then
+			-- Debuffs handled seperately by legacy code, so just do buffs
+			if (pconf.buffs.wrap) then
+				TPerl_Unit_BuffPositions(self, self.buffFrame.buff, nil, self.conf.buffs.size)
+			end
+			if pconf.debuffs.enable then
 				TPerl_Party_SetDebuffLocation(self)
 			end
 		end
@@ -711,11 +665,7 @@ local function TPerl_Party_Buff_UpdateAll(self)
 			self.buffFrame:Hide()
 			self.debuffFrame:Hide()
 		else
-			-- Some configs store disabled flags as 0 (e.g. after opening the options UI).
-			-- In Lua, 0 is truthy, so normalize to booleans before passing into the buff updater.
-			local castable = (pconf.buffs and (pconf.buffs.castable == 1 or pconf.buffs.castable == true)) or false
-			local curable = (pconf.debuffs and (pconf.debuffs.curable == 1 or pconf.debuffs.curable == true)) or false
-			TPerl_Unit_UpdateBuffs(self, nil, nil, castable, curable)
+			TPerl_Unit_UpdateBuffs(self, nil, nil, pconf.buffs.castable, pconf.debuffs.curable)
 			TPerl_Party_BuffPositions(self)
 		end
 
@@ -947,9 +897,7 @@ end
 -- TPerl_Party_UpdateMana
 local function TPerl_Party_UpdateMana(self)
 	local partyid = self.partyid
-
-	-- Refresh AFK flags if they changed (Retail safe).
-	if (self.afk and not TPerl_Party_SafeBool(UnitIsAFK(partyid))) then
+	if (self.afk and not UnitIsAFK(partyid)) then
 		TPerl_Party_UpdatePlayerFlags(self)
 	end
 
@@ -957,95 +905,52 @@ local function TPerl_Party_UpdateMana(self)
 	local unitPower = UnitPower(partyid, powerType)
 	local unitPowerMax = UnitPowerMax(partyid, powerType)
 
-	-- Always try to paint the bar. In Midnight/Retail, UnitPower values may be "secret",
-	-- but the StatusBar methods often still accept them.
-	TPerl_Party_TrySetPowerBar(self.statsFrame.manaBar, unitPower, unitPowerMax)
-
-	-- Midnight/Retail: UnitPower values can be returned as "secret" numbers.
-	-- We still want to display values when possible, but must avoid direct comparisons/arithmetics
-	-- on secret numbers outside protected calls.
-	local powerPercent = 0
-	local okMath = true
-	local adjPowerMax = unitPowerMax
-
-	local function calcPercent(up, um)
-		-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
-		local pp
-		if up > 0 and um == 0 then
-			um = up
-			pp = 1
-		elseif up == 0 and um == 0 then
-			pp = 0
-		else
-			pp = up / um
-		end
-		return um, pp
-	end
-
-	if IsRetail then
-		local ok, um, pp = pcall(calcPercent, unitPower, unitPowerMax)
-		if ok then
-			adjPowerMax = um
-			powerPercent = pp
-		else
-			okMath = false
-		end
-	else
-		adjPowerMax, powerPercent = calcPercent(unitPower, unitPowerMax)
-	end
-
-	-- Update percent/current display (Retail safe)
-	if powerType >= 1 then
-		local ok = true
-		if IsRetail then
-			ok = pcall(self.statsFrame.manaBar.percent.SetText, self.statsFrame.manaBar.percent, unitPower)
-		else
-			self.statsFrame.manaBar.percent:SetText(unitPower)
-		end
-		if not ok then
+		-- Midnight (Retail): UnitPower/UnitPowerMax can return secret values.
+		-- Avoid comparisons/arithmetics and just blank the text when values aren't accessible.
+		if (IsRetail and (not TPerl_Party_CanAccess(unitPower) or not TPerl_Party_CanAccess(unitPowerMax))) then
+			local maxVal = (TPerl_Party_CanAccess(unitPowerMax) and unitPowerMax) or 0
+			local curVal = (TPerl_Party_CanAccess(unitPower) and unitPower) or 0
+			self.statsFrame.manaBar:SetMinMaxValues(0, maxVal)
+			self.statsFrame.manaBar:SetValue(curVal)
 			self.statsFrame.manaBar.percent:SetText("")
-		end
-	else
-		local ok = true
-		if (not okMath) then
-			ok = false
-		elseif IsRetail then
-			ok = pcall(self.statsFrame.manaBar.percent.SetFormattedText, self.statsFrame.manaBar.percent, percD, 100 * powerPercent)
-		else
-			self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)
-		end
-		if not ok then
-			self.statsFrame.manaBar.percent:SetText("")
-		end
-	end
-
-	-- Respect the "Values" option for party frames.
-	-- Try to format values even if the numbers are secret (inside pcall on Retail).
-	if (pconf.values) then
-		local ok = true
-		if IsRetail then
-			ok = pcall(self.statsFrame.manaBar.text.SetFormattedText, self.statsFrame.manaBar.text, "%d/%d", unitPower, adjPowerMax)
-		else
-			self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, adjPowerMax)
-		end
-		if not ok then
 			self.statsFrame.manaBar.text:SetText("")
+			return
 		end
+
+	-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
+	local powerPercent
+	if unitPower > 0 and unitPowerMax == 0 then -- We have current mana but max mana failed.
+		unitPowerMax = unitPower -- Make max mana at least equal to current health
+		powerPercent = 1 -- And percent 100% cause a number divided by itself is 1, duh.
+	elseif unitPower == 0 and unitPowerMax == 0 then -- Probably doesn't use mana or is oom?
+		powerPercent = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
 	else
-		self.statsFrame.manaBar.text:SetText("")
+		powerPercent = unitPower / unitPowerMax -- Everything is dandy, so just do it right way.
+	end
+	-- end division by 0 check
+
+	--[[if (Partymanamax == 1 and Partymana > Partymanamax) then
+		Partymanamax = Partymana
+	end--]]
+
+	self.statsFrame.manaBar:SetMinMaxValues(0, unitPowerMax)
+	self.statsFrame.manaBar:SetValue(unitPower)
+
+	if powerType >= 1 then
+		self.statsFrame.manaBar.percent:SetText(unitPower)
+	else
+		self.statsFrame.manaBar.percent:SetFormattedText(percD, 100 * powerPercent)
 	end
 
+	--[[if (pconf.values) then
+		self.statsFrame.manaBar.text:Show()
+	else
+		self.statsFrame.manaBar.text:Hide()
+	end]]
 
-	-- Connection status (Retail safe): if the boolean is blocked/secret, assume connected.
-	local connected = UnitIsConnected(partyid)
-	local isConnected = true
-	if (not IsRetail) then
-		isConnected = (connected and true or false)
-	elseif (TPerl_Party_CanAccess(connected)) then
-		isConnected = (connected and true or false)
-	end
+	self.statsFrame.manaBar.text:SetFormattedText("%d/%d", unitPower, unitPowerMax)
 
-	if (not isConnected) then
+	if (not UnitIsConnected(partyid)) then
 		self.statsFrame.healthBar.text:SetText(TPERL_LOC_OFFLINE)
 		if (not self.statsFrame.greyMana) then
 			self.statsFrame:SetGrey()
@@ -1252,11 +1157,6 @@ local function TPerl_Party_TargetUpdateHealth(self)
 			tf.healthBar.text:SetFormattedText(percD, 100 * percent)	-- TPerl_Percent[floor(100 * hp / hpMax)])
 			tf.healthBar:SetMinMaxValues(0, hpMax)
 			tf.healthBar:SetValue(hp)
-		else
-			-- Clear percent text when target has no valid max health (e.g. no target) to avoid stale display.
-			tf.healthBar.text:SetText("")
-			tf.healthBar:SetMinMaxValues(0, 1)
-			tf.healthBar:SetValue(0)
 		end
 	end
 	tf.healthBar.text:Show()
@@ -1308,35 +1208,23 @@ local function TPerl_Party_UpdateTarget(self)
 		local targetid = self.targetid
 		local partyid = self.partyid
 		if (targetid and UnitIsConnected(partyid) and UnitExists(partyid) and UnitIsVisible(partyid)) then
-			-- If the party member has no target, clear the display so we don't show stale data.
-			local targetExists = UnitExists(targetid)
-			if (not TPerl_Party_SafeBool(targetExists)) then
-				self.targetFrame.text:SetText("")
-				if self.targetFrame.healthBar and self.targetFrame.healthBar.text then
-					self.targetFrame.healthBar.text:SetText("")
+				local targetname = UnitName(targetid)
+				-- Midnight/Retail: UnitName() can return a "secret" string under taint.
+				-- Never compare secret strings or use them in strict comparisons.
+				if (targetname and TPerl_Party_CanAccess(targetname)) then
+					if (targetname ~= UNKNOWNOBJECT) then
+						--self.targetFrame:SetAlpha(1)
+						self.targetFrame.text:SetText(targetname)
+						TPerl_SetUnitNameColor(self.targetFrame.text, targetid)
+						TPerl_Party_TargetUpdateHealth(self)
+						TPerl_Party_TargetRaidIcon(self)
+					end
+				else
+					-- If the name is not accessible, avoid crashing; leave the previous name in place.
+					-- Still update health/raid icons if possible.
+					TPerl_Party_TargetUpdateHealth(self)
+					TPerl_Party_TargetRaidIcon(self)
 				end
-				if self.targetFrame.healthBar then
-					self.targetFrame.healthBar:SetMinMaxValues(0, 1)
-					self.targetFrame.healthBar:SetValue(0)
-				end
-				TPerl_Party_TargetRaidIcon(self)
-				return
-			end
-
-			local targetname = UnitName(targetid)
-			-- Midnight/Retail: UnitName() can return a "secret" string under taint.
-			-- Never compare secret strings or use them in strict comparisons.
-			if (targetname and TPerl_Party_CanAccess(targetname) and targetname ~= UNKNOWNOBJECT) then
-				self.targetFrame.text:SetText(targetname)
-				TPerl_SetUnitNameColor(self.targetFrame.text, targetid)
-				TPerl_Party_TargetUpdateHealth(self)
-				TPerl_Party_TargetRaidIcon(self)
-			else
-				-- Name missing/unknown/secret: clear the name to avoid showing stale targets.
-				self.targetFrame.text:SetText("")
-				TPerl_Party_TargetUpdateHealth(self)
-				TPerl_Party_TargetRaidIcon(self)
-			end
 		end
 	end
 end
@@ -1355,21 +1243,6 @@ function TPerl_Party_OnUpdate(self, elapsed)
 	if (self.PlayerFlash) then
 		TPerl_Party_CombatFlash(self, elapsed, false)
 	end
-
-	-- Aura refresh safety net (Midnight/Retail):
-	-- Opening/closing options or UI refreshes can drop aura anchors or prevent UNIT_AURA from firing for these frames.
-	-- Poll lightly to ensure party buffs/debuffs and debuff highlights stay in sync without requiring a full relog.
-	if (IsRetail and self.conf and (pconf.buffs.enable or pconf.debuffs.enable or self._forceAuraRefresh)) then
-		self._auraPoll = (self._auraPoll or 0) - elapsed
-		if (self._auraPoll <= 0) then
-			self._auraPoll = 0.75
-			if (UnitExists(partyid)) then
-				TPerl_Party_Buff_UpdateAll(self)
-			end
-			self._forceAuraRefresh = nil
-		end
-	end
-
 
 	--self.time = self.time + elapsed
 	--if (self.time >= 0.2) then

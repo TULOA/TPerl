@@ -58,6 +58,55 @@ local unpack = unpack
 local setmetatable = setmetatable
 local hooksecurefunc = hooksecurefunc
 
+-- Midnight "secret value" helpers (safe across versions)
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+local function TPerl_Target_CanAccess(v)
+	-- In Midnight/Retail, values may be "secret" and cannot be compared in tainted addon code.
+	if (not IsRetail) then
+		return v ~= nil
+	end
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if (issecretvalue) then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or true
+	end
+	return v ~= nil
+end
+
+local function TPerl_Target_SafeBool(v)
+	-- Convert possibly-secret booleans into a safe Lua boolean.
+	if (not IsRetail) then
+		return (v and true or false)
+	end
+	if (not TPerl_Target_CanAccess(v)) then
+		return false
+	end
+	local ok, res = pcall(function()
+		return (v and true or false)
+	end)
+	return ok and res or false
+end
+
+local function TPerl_Target_GUIDEquals(a, b)
+	if (not IsRetail) then
+		return a == b
+	end
+	if (not TPerl_Target_CanAccess(a) or not TPerl_Target_CanAccess(b)) then
+		return false
+	end
+	local ok, res = pcall(function() return a == b end)
+	return ok and res or false
+end
+
+local function TPerl_Target_GUIDEqualsUnit(unit, guid)
+	return TPerl_Target_GUIDEquals(UnitGUID(unit), guid)
+end
+
 local Enum = Enum
 
 local CanInspect = CanInspect
@@ -319,8 +368,11 @@ end
 
 -- TPerl_Raid_HighlightCallback
 function TPerl_Target_HighlightCallback(self, updateGUID)
-	if (UnitGUID(self.partyid) == updateGUID and UnitIsFriend("player", self.partyid)) then
-		TPerl_Highlight:SetHighlight(self, updateGUID)
+	if (TPerl_Target_GUIDEqualsUnit(self.partyid, updateGUID) and UnitIsFriend("player", self.partyid)) then
+		-- Don't pass secret GUIDs deeper into addon systems that might index/compare them.
+		if (not IsRetail or TPerl_Target_CanAccess(updateGUID)) then
+			TPerl_Highlight:SetHighlight(self, updateGUID)
+		end
 	end
 end
 
@@ -708,7 +760,11 @@ do
 
 		-- INSPECT_READY
 		function TPerl_Target_Events:INSPECT_READY(guid)
-			if (UnitGUID(self.partyid) == guid) then
+				-- Midnight/Retail: UnitGUID() may yield a secret string, and comparing it will throw.
+				if IsRetail then
+					return
+				end
+				if (UnitGUID(self.partyid) == guid) then
 				inspectReady = true
 				TPerl_Target_UpdateTalents(self, guid)
 			end
@@ -731,7 +787,7 @@ do
 					local name1, name2, name3, group, iconTexture, background
 					if (cached) then
 						name1, name2, name3, group = unpack(cached)
-					elseif (inspectReady and guid == UnitGUID(partyid)) then
+					elseif (inspectReady and TPerl_Target_GUIDEquals(guid, UnitGUID(partyid))) then
 						local remoteInspectNeeded = not UnitIsUnit("player", partyid) or nil
 						if not IsClassic then
 							group = GetInspectSpecialization("target")
@@ -781,8 +837,19 @@ local function TPerl_Target_UpdateType(self)
 	local partyid = self.partyid
 	local targettype = UnitCreatureType(partyid)
 
-	if (targettype == TPERL_TYPE_NOT_SPECIFIED or targettype == "") then
-		targettype = nil
+	-- Midnight/Retail: UnitCreatureType() may return a secret string. Comparing
+	-- or processing secret strings in tainted addon code can throw.
+	if (IsRetail and canaccessvalue) then
+		local ok, can = pcall(canaccessvalue, targettype)
+		if (not ok or not can) then
+			targettype = nil
+		elseif (targettype == TPERL_TYPE_NOT_SPECIFIED or targettype == "") then
+			targettype = nil
+		end
+	else
+		if (targettype == TPERL_TYPE_NOT_SPECIFIED or targettype == "") then
+			targettype = nil
+		end
 	end
 
 	if (self.conf.mobType) then
@@ -797,7 +864,7 @@ local function TPerl_Target_UpdateType(self)
 	if not IsClassic and (UnitIsWildBattlePet(partyid) or UnitIsBattlePetCompanion(partyid)) then
 		self.creatureTypeFrame.text:SetText(PET_TYPE_SUFFIX[UnitBattlePetType(partyid)])
 	else
-		self.creatureTypeFrame.text:SetText(targettype)
+		self.creatureTypeFrame.text:SetText(targettype or "")
 	end
 
 	--if (UnitIsPlayer(partyid)) then
@@ -1049,7 +1116,7 @@ function TPerl_Target_UpdateHealth(self)
 
 	self.targethp = hp
 	self.targethpmax = hpMax
-	self.afk = UnitIsAFK(partyid) and conf.showAFK == 1
+	self.afk = (TPerl_Target_SafeBool(UnitIsAFK(partyid)) and conf.showAFK == 1)
 
 	--[[if (self.targethp == 100) then
 		-- Try to work around the occasion WoW targettarget bug of a zero hp tank who is not at zero hp
@@ -1102,10 +1169,10 @@ function TPerl_Target_UpdateHealth(self)
 		elseif (UnitIsDead(partyid)) then
 			--self.statsFrame.manaBar.percent:Hide()
 			self.statsFrame.healthBar.percent:SetText(TPERL_LOC_DEAD)
-		elseif (UnitExists(partyid) and not UnitIsConnected(partyid)) then
+		elseif (TPerl_Target_SafeBool(UnitExists(partyid)) and not TPerl_Target_SafeBool(UnitIsConnected(partyid))) then
 			self.statsFrame.manaBar.percent:Hide()
 			self.statsFrame.healthBar.percent:SetText(TPERL_LOC_OFFLINE)
-		elseif (UnitIsAFK(partyid) and conf.showAFK) --[[and (self == TPerl_Target or self == TPerl_Focus))]] then
+		elseif (TPerl_Target_SafeBool(UnitIsAFK(partyid)) and conf.showAFK) --[[and (self == TPerl_Target or self == TPerl_Focus))]] then
 			self.statsFrame.healthBar.percent:SetText(CHAT_MSG_AFK)
 		else
 			self.statsFrame.manaBar.percent:Show()
@@ -1118,9 +1185,9 @@ function TPerl_Target_UpdateHealth(self)
 			hbt:SetText(TPERL_LOC_FEIGNDEATH)--]]
 		elseif (UnitIsDead(partyid)) then
 			self.statsFrame.healthBar.text:SetText(TPERL_LOC_DEAD)
-		elseif (UnitExists(partyid) and not UnitIsConnected(partyid)) then
+		elseif (TPerl_Target_SafeBool(UnitExists(partyid)) and not TPerl_Target_SafeBool(UnitIsConnected(partyid))) then
 			self.statsFrame.healthBar.text:SetText(TPERL_LOC_OFFLINE)
-		elseif (UnitIsAFK(partyid) and conf.showAFK) then
+		elseif (TPerl_Target_SafeBool(UnitIsAFK(partyid)) and conf.showAFK) then
 			self.statsFrame.healthBar.text:SetText(CHAT_MSG_AFK)
 		else
 			color = true
@@ -1396,7 +1463,7 @@ function TPerl_Target_OnUpdate(self, elapsed)
 		CombatFeedback_OnUpdate(self, elapsed)
 	end
 
-	local newAFK = UnitIsAFK(partyid)
+	local newAFK = TPerl_Target_SafeBool(UnitIsAFK(partyid))
 
 	if (conf.showAFK and newAFK ~= self.afk) then
 		TPerl_Target_UpdateHealth(self)
@@ -1959,14 +2026,14 @@ function TPerl_Target_Set_Bits(self)
 
 	if self == TPerl_Target then
 		TPerl_Register_Prediction(self, tconf, function(guid)
-			if guid == UnitGUID("target") then
+				if TPerl_Target_GUIDEqualsUnit("target", guid) then
 				return "target"
 			end
 		end, "target")
 	end
 	if self == TPerl_Focus then
 		TPerl_Register_Prediction(self, fconf, function(guid)
-			if guid == UnitGUID("focus") then
+				if TPerl_Target_GUIDEqualsUnit("focus", guid) then
 				return "focus"
 			end
 		end, "focus")
