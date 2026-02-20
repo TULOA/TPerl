@@ -59,7 +59,789 @@ local unpack = unpack
 
 local CheckInteractDistance = CheckInteractDistance
 local CreateFrame = CreateFrame
-local DebuffTypeColor = DebuffTypeColor
+local DebuffTypeColor = _G.DebuffTypeColor or DebuffTypeColor or {}
+
+-- Midnight "secret value" helpers (safe across versions)
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+local function TPerl_CanAccess(v)
+	if v == nil then
+		return false
+	end
+	-- In Midnight/Retail, values may be "secret" and cannot be compared/indexed in tainted code.
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if (issecretvalue) then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or true
+	end
+	return v ~= nil
+end
+
+local function TPerl_SafeBool(v)
+	-- Convert possibly-secret booleans into a safe Lua boolean.
+	-- In Midnight/Retail, a 'secret boolean' can throw if used directly in a boolean test.
+	if (not TPerl_CanAccess(v)) then
+		return false
+	end
+	local ok, res = pcall(function()
+		return (v and true or false)
+	end)
+	return ok and res or false
+end
+
+-- Debuff type colors: Blizzard usually provides DebuffTypeColor, but Midnight/Retail may not populate it early.
+-- Provide safe defaults so dispellable debuff highlighting never crashes.
+local TPerl_DefaultDebuffTypeColor = {
+	Magic	= { r = 0.2, g = 0.6, b = 1.0, a = 1 },
+	Curse	= { r = 0.6, g = 0.0, b = 1.0, a = 1 },
+	Disease	= { r = 0.6, g = 0.4, b = 0.0, a = 1 },
+	Poison	= { r = 0.0, g = 0.6, b = 0.0, a = 1 },
+	none	= { r = 0.8, g = 0.0, b = 0.0, a = 1 },
+}
+
+local function TPerl_GetDebuffTypeColorSafe(debuffType)
+	-- debuffType is typically one of: Magic, Curse, Disease, Poison, none
+	local dt = debuffType
+	if (dt and TPerl_CanAccess(dt)) then
+		local tbl = _G.DebuffTypeColor
+		if (type(tbl) == "table") then
+			local c = tbl[dt] or tbl.none or tbl["none"]
+			if (type(c) == "table" and c.r and c.g and c.b) then
+				-- Avoid nil alpha, some clients omit it.
+				if (c.a == nil) then
+					c.a = 1
+				end
+				return c
+			end
+		end
+		return TPerl_DefaultDebuffTypeColor[dt] or TPerl_DefaultDebuffTypeColor.none
+	end
+	return TPerl_DefaultDebuffTypeColor.none
+end
+
+-- Normalize dispel/debuff types across clients (Retail/Midnight/Classic/private).
+-- Some clients return upper-case or localized strings; normalize them to Blizzard's canonical keys.
+local function TPerl_NormalizeDispelType(dt)
+	if (dt == nil) then
+		return nil
+	end
+
+	-- Numeric codes (rare; some custom clients)
+	if (type(dt) == "number") then
+		if (dt == 1) then
+			return "Magic"
+		elseif (dt == 2) then
+			return "Curse"
+		elseif (dt == 3) then
+			return "Disease"
+		elseif (dt == 4) then
+			return "Poison"
+		end
+		return nil
+	end
+
+	if (type(dt) ~= "string") then
+		-- Could be a "secret string" userdata in Midnight; don't touch it.
+		if (TPerl_CanAccess(dt)) then
+			-- If it's accessible and tostring works, keep it.
+			local ok, s = pcall(tostring, dt)
+			return ok and s or nil
+		end
+		return nil
+	end
+
+	-- Avoid operating on secret strings.
+	if (not TPerl_CanAccess(dt)) then
+		return nil
+	end
+
+	local ok, low = pcall(string.lower, dt)
+	if (not ok or not low) then
+		return dt
+	end
+
+	-- English
+	if (low == "magic") then return "Magic" end
+	if (low == "curse") then return "Curse" end
+	if (low == "disease") then return "Disease" end
+	if (low == "poison") then return "Poison" end
+	if (low == "none") then return "none" end
+
+	-- Spanish (just in case a custom client localizes dispel types)
+	if (low == "magia") then return "Magic" end
+	if (low == "maldicion" or low == "maldición") then return "Curse" end
+	if (low == "enfermedad") then return "Disease" end
+	if (low == "veneno") then return "Poison" end
+	if (low == "ninguno") then return "none" end
+
+	-- Upper-case constants
+	if (low == "magic" or low == "magic") then return "Magic" end
+
+	-- Unknown string: return as-is (colour lookup will fall back to "none")
+	return dt
+end
+
+
+
+
+
+-- Debuff-type fallback for clients that return secret dispel types.
+-- Some Midnight/Retail servers return (name/dispelType) as secret values for UnitAura/C_UnitAuras,
+-- but the GameTooltip still exposes the dispel type as plain text ("Magic"/"Poison"/etc).
+-- We scan the tooltip only when needed and cache results by spellId.
+TPerl_DispelTypeCache = TPerl_DispelTypeCache or {}
+
+function TPerl_SafeSpellIdKey(spellId)
+	if (spellId == nil) then
+		return nil
+	end
+	if (not TPerl_CanAccess(spellId)) then
+		return nil
+	end
+	if (type(spellId) == "number") then
+		return spellId
+	end
+	local ok, n = pcall(tonumber, spellId)
+	if (ok and type(n) == "number") then
+		return n
+	end
+	return nil
+end
+
+
+function TPerl_GetCachedDispelType(spellId)
+	local key = TPerl_SafeSpellIdKey(spellId)
+	if (not key) then
+		return nil
+	end
+	local e = TPerl_DispelTypeCache[key]
+	if (e and e.dt) then
+		-- 24h TTL to keep the cache bounded but stable
+		if (not e.ts) then
+			return e.dt, e.name
+		end
+		if (GetTime() - e.ts) < 86400 then
+			return e.dt, e.name
+		end
+		TPerl_DispelTypeCache[key] = nil
+	end
+	return nil
+end
+
+function TPerl_SetCachedDispelType(spellId, dt, name)
+	local key = TPerl_SafeSpellIdKey(spellId)
+	if (not key or not dt) then
+		return
+	end
+	TPerl_DispelTypeCache[key] = { dt = dt, name = name, ts = GetTime() }
+end
+
+
+-- Additional cache keyed by auraInstanceID (often accessible even when spellId/name are secret).
+TPerl_DispelTypeCacheByAuraId = TPerl_DispelTypeCacheByAuraId or {}
+
+function TPerl_SafeAuraIdKey(auraId)
+	if (auraId == nil) then
+		return nil
+	end
+	if (not TPerl_CanAccess(auraId)) then
+		return nil
+	end
+	if (type(auraId) == "number") then
+		return auraId
+	end
+	local ok, n = pcall(tonumber, auraId)
+	if (ok and type(n) == "number") then
+		return n
+	end
+	return nil
+end
+
+
+
+-- Safe table access helpers (avoid 'forbidden table' / taint errors)
+function TPerl_SafeTableGet(t, k)
+	if (type(t) ~= "table") then
+		return nil
+	end
+	local ok, v = pcall(function() return t[k] end)
+	if (ok) then
+		return v
+	end
+	return nil
+end
+
+function TPerl_SafeTableIndex(t, i)
+	if (type(t) ~= "table") then
+		return nil
+	end
+	local ok, v = pcall(function() return t[i] end)
+	if (ok) then
+		return v
+	end
+	return nil
+end
+
+
+
+
+-- --------------------------------------------------------------------
+-- Aura API safety helpers (Midnight/Retail restrictions)
+-- Some C_UnitAuras calls reject compound unit tokens like "targettarget" or "pettarget".
+-- Use these helpers to avoid hard errors and gracefully fall back to slot-based APIs when needed.
+-- --------------------------------------------------------------------
+
+function TPerl_UnitTokenAllowsC_UnitAuras(unit)
+	if (type(unit) ~= "string") then
+		return false
+	end
+	-- Blizzard Aura API rejects compound tokens containing "target" (e.g. "party1target", "targettarget", "pettarget").
+	if (unit ~= "target" and strfind(unit, "target", 1, true)) then
+		return false
+	end
+	return true
+end
+
+-- Returns auraData table (Retail-style) or nil. Never throws.
+function TPerl_SafeGetAuraDataByIndex(unit, index, filter)
+	if (IsRetail and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex and TPerl_UnitTokenAllowsC_UnitAuras(unit)) then
+		local ok, auraData = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
+		if (ok) then
+			return auraData
+		end
+	end
+
+	-- Fallback: slot-based APIs. UnitAura is removed on modern Retail (11.0.2+),
+	-- and GetAuraDataByIndex rejects compound tokens, but UnitAuraSlots + GetAuraDataBySlot may still work.
+	if (IsRetail and UnitAuraSlots and C_UnitAuras and C_UnitAuras.GetAuraDataBySlot) then
+		local r = {pcall(UnitAuraSlots, unit, filter, index)}
+		-- r[1]=ok, r[2]=continuationToken, r[3]=slot1...
+		if (r[1]) then
+			local slot = r[index + 2]
+			if (slot) then
+				local ok, auraData = pcall(C_UnitAuras.GetAuraDataBySlot, unit, slot)
+				if (ok) then
+					return auraData
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+
+-- Midnight/Retail: secret/forbidden dispelType support via ColorCurve.
+-- We avoid comparing dispelType strings and instead transform dispelType -> secret color.
+TPerl_DebuffColorCurve = TPerl_DebuffColorCurve or nil
+
+function TPerl_InitDebuffColorCurve()
+	if (TPerl_DebuffColorCurve) then
+		return TPerl_DebuffColorCurve
+	end
+
+	if (not C_CurveUtil or not C_CurveUtil.CreateColorCurve) then
+		return nil
+	end
+	if (not Enum or not Enum.LuaCurveType or not Enum.AuraDispelType) then
+		return nil
+	end
+	if (not CreateColor) then
+		return nil
+	end
+
+	local ok, curve = pcall(C_CurveUtil.CreateColorCurve)
+	if (not ok or not curve) then
+		return nil
+	end
+
+	pcall(curve.SetType, curve, Enum.LuaCurveType.Step)
+
+	pcall(curve.AddPoint, curve, Enum.AuraDispelType.None,    CreateColor(0.0, 0.0, 0.0, 0.0))
+	pcall(curve.AddPoint, curve, Enum.AuraDispelType.Magic,   CreateColor(0.2, 0.6, 1.0))
+	pcall(curve.AddPoint, curve, Enum.AuraDispelType.Curse,   CreateColor(0.6, 0.0, 1.0))
+	pcall(curve.AddPoint, curve, Enum.AuraDispelType.Disease, CreateColor(0.6, 0.4, 0.0))
+	pcall(curve.AddPoint, curve, Enum.AuraDispelType.Poison,  CreateColor(0.0, 0.6, 0.0))
+
+	TPerl_DebuffColorCurve = curve
+	return curve
+end
+
+
+-- Returns: colourTable{r,g,b,a}, auraId, spellId, name
+-- Uses the official helper when available to convert (possibly secret) dispel type -> colour via our curve.
+function TPerl_GetDebuffColorByAuraData(unit, auraData, curve)
+	curve = curve or TPerl_InitDebuffColorCurve()
+	if (not curve or not auraData) then
+		return nil
+	end
+
+	local auraId = TPerl_SafeTableGet(auraData, "auraInstanceID") or TPerl_SafeTableGet(auraData, "auraInstanceId")
+	local colourObj
+
+	if (auraId and C_UnitAuras and C_UnitAuras.GetAuraDispelTypeColor) then
+		local okC, c = pcall(C_UnitAuras.GetAuraDispelTypeColor, unit, auraId, curve)
+		if (okC and c) then
+			colourObj = c
+		end
+	end
+
+	-- Fallback: some clients may expose dispelType as an object with :GetColorFromCurve(curve)
+	if (not colourObj) then
+		local dispelType = TPerl_SafeTableGet(auraData, "dispelType")
+		if (dispelType) then
+			local okC, c = pcall(dispelType.GetColorFromCurve, dispelType, curve)
+			if (okC and c) then
+				colourObj = c
+			end
+		end
+	end
+
+	if (not colourObj) then
+		return nil
+	end
+
+	local okRGBA, r, g, b, a = pcall(colourObj.GetRGBA, colourObj)
+	if (not okRGBA) then
+		return nil
+	end
+	-- Allow curves to encode "no highlight" as alpha 0.
+	if (a == 0) then
+		return nil
+	end
+
+	local spellId = TPerl_SafeTableGet(auraData, "spellId") or TPerl_SafeTableGet(auraData, "spellID")
+	local name = TPerl_SafeTableGet(auraData, "name")
+
+	return { r = r, g = g, b = b, a = a }, auraId, spellId, name
+end
+
+
+-- Returns: colourTable{r,g,b,a}, auraId, spellId, name
+function TPerl_GetDebuffColorByAuraIndex(unit, index)
+	local curve = TPerl_InitDebuffColorCurve()
+	if (not curve) then
+		return nil
+	end
+	if (not C_UnitAuras or not C_UnitAuras.GetAuraDataByIndex) then
+		return nil
+	end
+
+	local okAD, auraData = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
+	if (not okAD or not auraData) then
+		return nil
+	end
+
+	return TPerl_GetDebuffColorByAuraData(unit, auraData, curve)
+end
+
+function TPerl_GetCachedDispelTypeByAuraId(auraId)
+	local key = TPerl_SafeAuraIdKey(auraId)
+	if (not key) then
+		return nil
+	end
+	local e = TPerl_DispelTypeCacheByAuraId[key]
+	if (e and e.dt) then
+		if (not e.ts) then
+			return e.dt
+		end
+		if (GetTime() - e.ts) < 86400 then
+			return e.dt
+		end
+		TPerl_DispelTypeCacheByAuraId[key] = nil
+	end
+	return nil
+end
+
+function TPerl_SetCachedDispelTypeByAuraId(auraId, dt)
+	local key = TPerl_SafeAuraIdKey(auraId)
+	if (not key or not dt) then
+		return
+	end
+	TPerl_DispelTypeCacheByAuraId[key] = { dt = dt, ts = GetTime() }
+end
+
+-- Scan tooltip data (C_TooltipInfo) safely to infer dispel type when the API returns secret values.
+-- IMPORTANT: Do not use secret values as table indices or for string operations.
+function TPerl_FindDispelTypeInTooltipData(data)
+	-- C_TooltipInfo can return "forbidden" tables on some clients. Any direct indexing can hard error.
+	-- Always use safe getters (pcall) and avoid #/ipairs on those tables.
+	if (type(data) ~= "table") then
+		return nil
+	end
+
+	local lines = TPerl_SafeTableGet(data, "lines")
+	if (type(lines) ~= "table") then
+		return nil
+	end
+
+	local nameLine = nil
+
+	-- Tooltip lines are typically <= 10; scan a bounded range safely.
+	for i = 1, 20 do
+		local line = TPerl_SafeTableIndex(lines, i)
+		if (not line) then
+			break
+		end
+
+		if (type(line) == "table") then
+			-- Remember first accessible text as "name line"
+			if (not nameLine) then
+				local n = TPerl_SafeTableGet(line, "leftText") or TPerl_SafeTableGet(line, "text") or TPerl_SafeTableGet(line, "rightText")
+				if (n and TPerl_CanAccess(n)) then
+					nameLine = n
+				end
+			end
+
+			local function checkExact(s)
+				if (not s or not TPerl_CanAccess(s)) then
+					return nil
+				end
+				local dt = TPerl_NormalizeDispelType(s)
+				if (dt == "Magic" or dt == "Curse" or dt == "Disease" or dt == "Poison" or dt == "none") then
+					return dt
+				end
+				return nil
+			end
+
+			-- Check any available text fields for dispel keywords/types
+			local c1 = TPerl_SafeTableGet(line, "leftText")
+			local c2 = TPerl_SafeTableGet(line, "rightText")
+			local c3 = TPerl_SafeTableGet(line, "text")
+
+			local dt = checkExact(c1) or checkExact(c2) or checkExact(c3)
+			if (dt) then
+				return dt, nameLine
+			end
+
+			-- Heuristic: localized longer strings can include the type (e.g. "Tipo: Veneno")
+			local function tryHeuristic(s)
+				if (not s or not TPerl_CanAccess(s)) then
+					return nil
+				end
+				local ss
+				if (strtrim) then
+					ss = strtrim(s)
+				else
+					ss = tostring(s):gsub("^%s+", ""):gsub("%s+$", "")
+				end
+
+				local ok2, low = pcall(string.lower, ss)
+				if (ok2 and low and #low <= 120) then
+					if (low:find("veneno", 1, true) or low:find("poison", 1, true)) then return "Poison" end
+					if (low:find("maldici", 1, true) or low:find("curse", 1, true)) then return "Curse" end
+					if (low:find("enfermedad", 1, true) or low:find("disease", 1, true)) then return "Disease" end
+					if (low:find("magia", 1, true) or low:find("magic", 1, true)) then return "Magic" end
+					if (low == "none" or low:find("sin tipo", 1, true)) then return "none" end
+				end
+				return nil
+			end
+
+			local dtH = tryHeuristic(c1) or tryHeuristic(c2) or tryHeuristic(c3)
+			if (dtH) then
+				return dtH, nameLine
+			end
+		end
+	end
+
+	return nil, nameLine
+end
+
+function TPerl_GetDispelTypeFromTooltip(unit, index)
+	if (not unit or not index) then
+		return nil
+	end
+
+	-- Prefer tooltip data API if available (doesn't require anchoring a visible GameTooltip).
+	-- NOTE: Some Midnight clients can return "forbidden" tables here; always protect with pcall.
+	if (C_TooltipInfo and C_TooltipInfo.GetUnitAura) then
+		local ok, data = pcall(C_TooltipInfo.GetUnitAura, unit, index, "HARMFUL")
+		if (ok and data) then
+			local ok2, dt, nameLine = pcall(TPerl_FindDispelTypeInTooltipData, data)
+			if (ok2 and dt) then
+				return dt, nameLine
+			end
+		end
+	end
+
+	-- Fallback: hidden GameTooltip scan
+	if (not TPerl_DebuffScanTT) then
+		TPerl_DebuffScanTT = CreateFrame("GameTooltip", "TPerlDebuffScanTooltip", UIParent, "GameTooltipTemplate")
+		TPerl_DebuffScanTT:SetOwner(UIParent, "ANCHOR_NONE")
+		TPerl_DebuffScanTT:Hide()
+	end
+
+	local tt = TPerl_DebuffScanTT
+	tt:SetOwner(UIParent, "ANCHOR_NONE")
+	tt:ClearLines()
+
+	-- Prefer SetUnitDebuff (works across versions); fallback to SetUnitAura for some clients.
+	local okSet = pcall(tt.SetUnitDebuff, tt, unit, index)
+	if (not okSet) then
+		okSet = pcall(tt.SetUnitAura, tt, unit, index, "HARMFUL")
+	end
+	if (not okSet) then
+		tt:Hide()
+		return nil
+	end
+
+	local nameLineObj = _G["TPerlDebuffScanTooltipTextLeft1"]
+	local nameLine = nameLineObj and nameLineObj:GetText()
+
+	local function checkLine(line)
+		if (not line or not TPerl_CanAccess(line)) then
+			return nil
+		end
+
+		local s
+		if (strtrim) then
+			s = strtrim(line)
+		else
+			s = tostring(line):gsub("^%s+", ""):gsub("%s+$", "")
+		end
+
+		local dt = TPerl_NormalizeDispelType(s)
+		if (dt == "Magic" or dt == "Curse" or dt == "Disease" or dt == "Poison" or dt == "none") then
+			return dt
+		end
+
+		-- Heuristic: localized longer strings can include the type (e.g. "Tipo: Veneno")
+		local ok2, low = pcall(string.lower, s)
+		if (ok2 and low and #low <= 120) then
+			if (low:find("veneno", 1, true) or low:find("poison", 1, true)) then return "Poison" end
+			if (low:find("maldici", 1, true) or low:find("curse", 1, true)) then return "Curse" end
+			if (low:find("enfermedad", 1, true) or low:find("disease", 1, true)) then return "Disease" end
+			if (low:find("magia", 1, true) or low:find("magic", 1, true)) then return "Magic" end
+			if (low == "none" or low:find("sin tipo", 1, true)) then return "none" end
+		end
+
+		return nil
+	end
+
+	local nlines = tt:NumLines() or 0
+	-- Scan both left and right columns; some clients display the dispel type on the right (often on line 1).
+	for i = 1, nlines do
+		local objL = _G["TPerlDebuffScanTooltipTextLeft" .. i]
+		local objR = _G["TPerlDebuffScanTooltipTextRight" .. i]
+		local lineL = objL and objL:GetText()
+		local lineR = objR and objR:GetText()
+
+		local dt = checkLine(lineL) or checkLine(lineR)
+		if (dt) then
+			tt:Hide()
+			return dt, nameLine
+		end
+	end
+
+	tt:Hide()
+	return nil, nameLine
+end
+
+-- TPerl_GetHarmfulAura
+-- Best-effort harmful aura read that prefers the source which provides a usable dispel type.
+-- Some Midnight/Retail clients can return "secret" values via C_UnitAuras, while UnitAura may still provide usable data.
+function TPerl_GetHarmfulAura(unit, index)
+	local nameUD, dispelUD, spellIdUD
+	local nameUA, dispelUA, spellIdUA
+	local nameCA, dispelCA, spellIdCA, auraIdCA
+
+	-- UnitDebuff is often the most compatible for dispel type (Curse/Magic/Poison/Disease)
+	local okD, nd, _, _, dd, _, _, _, _, sidD = pcall(UnitDebuff, unit, index)
+	if (okD) then
+		nameUD = nd
+		dispelUD = dd
+		spellIdUD = sidD
+	end
+
+	-- UnitAura first (more compatible with older addon logic, and sometimes less "secret" on custom clients)
+	local ok, n, _, _, d, _, _, _, _, sid = pcall(UnitAura, unit, index, "HARMFUL")
+	if (ok) then
+		nameUA = n
+		dispelUA = d
+		spellIdUA = sid
+	end
+
+	-- C_UnitAuras fallback/alternative
+	if (not IsVanillaClassic and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then
+		local okAD, auraData = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, "HARMFUL")
+		if (okAD and auraData) then
+			nameCA = TPerl_SafeTableGet(auraData, "name")
+			dispelCA = TPerl_SafeTableGet(auraData, "dispelName")
+			spellIdCA = TPerl_SafeTableGet(auraData, "spellId") or TPerl_SafeTableGet(auraData, "spellID")
+			auraIdCA = TPerl_SafeTableGet(auraData, "auraInstanceID") or TPerl_SafeTableGet(auraData, "auraInstanceId")
+		end
+	end
+
+	-- No aura in either source
+	if (not nameUD and not nameUA and not nameCA) then
+		return nil
+	end
+
+-- Choose dispel type: prefer one that normalizes to a known dispel type
+local function isUseful(norm)
+	return (norm == "Magic" or norm == "Curse" or norm == "Disease" or norm == "Poison" or norm == "none")
+end
+
+-- Prefer UnitDebuff's debuffType if it is usable, then UnitAura, then AuraData.
+local chosenDispel = dispelUD
+local normUD = TPerl_NormalizeDispelType(dispelUD)
+if (not isUseful(normUD)) then
+	chosenDispel = dispelUA
+	local normUA = TPerl_NormalizeDispelType(dispelUA)
+	if (not isUseful(normUA)) then
+		local normCA = TPerl_NormalizeDispelType(dispelCA)
+		if (isUseful(normCA)) then
+			chosenDispel = dispelCA
+		end
+	end
+end
+
+-- Choose name: prefer any accessible name if available (UD > UA > CA)
+local chosenName
+if (nameUD and TPerl_CanAccess(nameUD)) then
+	chosenName = nameUD
+elseif (nameUA and TPerl_CanAccess(nameUA)) then
+	chosenName = nameUA
+elseif (nameCA and TPerl_CanAccess(nameCA)) then
+	chosenName = nameCA
+else
+	chosenName = nameUD or nameUA or nameCA
+end
+
+	-- Choose spellId
+	local chosenSpellId = spellIdUD or spellIdUA or spellIdCA
+
+	-- Choose auraInstanceID (Retail aura data)
+	local chosenAuraId = auraIdCA	-- Tooltip/cache fallback when dispel type is hidden/secret on some clients.
+	local normChosen = TPerl_NormalizeDispelType(chosenDispel)
+	local safeSpellKey = TPerl_SafeSpellIdKey(chosenSpellId)
+	local safeAuraKey = TPerl_SafeAuraIdKey(chosenAuraId)
+
+	if (not isUseful(normChosen)) then
+		-- 1) AuraId cache (most stable)
+		if (safeAuraKey) then
+			local cdt = TPerl_GetCachedDispelTypeByAuraId(safeAuraKey)
+			if (cdt) then
+				chosenDispel = cdt
+				normChosen = TPerl_NormalizeDispelType(chosenDispel)
+			end
+		end
+
+		-- 2) SpellId cache (if usable)
+		if (safeSpellKey and not isUseful(normChosen)) then
+			local cachedDt, cachedName = TPerl_GetCachedDispelType(safeSpellKey)
+			if (cachedDt) then
+				chosenDispel = cachedDt
+				normChosen = TPerl_NormalizeDispelType(chosenDispel)
+				if ((not chosenName) or (not TPerl_CanAccess(chosenName))) and cachedName and TPerl_CanAccess(cachedName) then
+					chosenName = cachedName
+				end
+			end
+		end
+
+		-- 3) Tooltip scan (doesn't require spellId)
+		if (not isUseful(normChosen)) then
+			local dtTT, nameTT = TPerl_GetDispelTypeFromTooltip(unit, index)
+			if (dtTT) then
+				chosenDispel = dtTT
+				normChosen = TPerl_NormalizeDispelType(chosenDispel)
+				if (safeAuraKey) then
+					TPerl_SetCachedDispelTypeByAuraId(safeAuraKey, dtTT)
+				end
+				if (safeSpellKey) then
+					TPerl_SetCachedDispelType(safeSpellKey, dtTT, nameTT)
+				end
+			end
+			if ((not chosenName) or (not TPerl_CanAccess(chosenName))) and nameTT and TPerl_CanAccess(nameTT) then
+				chosenName = nameTT
+			end
+		end
+	end
+
+
+return chosenName, chosenDispel, chosenSpellId, chosenAuraId, nameUA, dispelUA, spellIdUA, nameCA, dispelCA, spellIdCA, auraIdCA, nameUD, dispelUD, spellIdUD
+end
+
+
+-- Midnight: stack-count display that won't trigger secret-value compares.
+-- Prefer the classic UnitAura count when accessible; otherwise query AuraData by auraInstanceID.
+function TPerl_SetAuraStackText(button, legacyCount, unit, auraInstanceID)
+	if (not button or not button.count) then
+		return
+	end
+
+	-- Classic path (non-secret count)
+	if (legacyCount ~= nil and TPerl_CanAccess(legacyCount) and legacyCount > 1) then
+		button.count:SetText(legacyCount)
+		button.count:Show()
+		return
+	end
+
+	-- Midnight path (AuraData). applications/charges may be secret; we avoid comparing when secret.
+	local aura
+	if (auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID and TPerl_UnitTokenAllowsC_UnitAuras(unit)) then
+		local okAD, a = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, auraInstanceID)
+		if (okAD) then
+			aura = a
+		end
+	end
+	if (aura) then
+		local apps = aura.applications
+		if (type(apps) == "number") then
+			if (TPerl_CanAccess(apps)) then
+				if (apps > 1) then
+					button.count:SetText(apps)
+					button.count:Show()
+					return
+				end
+			else
+				-- Secret number: show it verbatim (may display "1" on non-stackable auras, but avoids errors)
+				button.count:SetText(apps)
+				button.count:Show()
+				return
+			end
+		end
+
+		local charges = aura.charges
+		if (type(charges) == "number") then
+			if (TPerl_CanAccess(charges)) then
+				if (charges > 1) then
+					button.count:SetText(charges)
+					button.count:Show()
+					return
+				end
+			else
+				button.count:SetText(charges)
+				button.count:Show()
+				return
+			end
+		end
+	end
+
+	button.count:Hide()
+end
+
+-- Midnight: when aura timing is secret, we can't run our own countdown logic.
+-- Let Blizzard render cooldown text by allowing countdown numbers and clearing noCooldownCount.
+local function TPerl_EnableBlizzardCooldownText(cd)
+	if (not cd) then
+		return
+	end
+	if (cd.SetHideCountdownNumbers) then
+		cd:SetHideCountdownNumbers(false)
+	end
+	-- Some cooldown-text systems (including Blizzard's) respect this opt-out flag.
+	cd.noCooldownCount = nil
+	if (cd.SetUseAuraDisplayTime) then
+		cd:SetUseAuraDisplayTime(true)
+	end
+end
+
+
 local GetAddOnCPUUsage = GetAddOnCPUUsage
 local GetAddOnMemoryUsage = GetAddOnMemoryUsage
 local GetCursorPosition = GetCursorPosition
@@ -368,10 +1150,10 @@ local function DoRangeCheck(unit, opt)
 
 	if opt.PlusDebuff and ((opt.PlusHealth and range == 0) or not opt.PlusHealth) then
 		local name
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, 1, "HARMFUL|RAID")
+		if IsRetail and C_UnitAuras then
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, 1, "HARMFUL|RAID")
 			if auraData then
-				name = auraData.name
+				name = TPerl_SafeTableGet(auraData, "name")
 			end
 		else
 			name = UnitAura(unit, 1, "HARMFUL|RAID")
@@ -383,10 +1165,10 @@ local function DoRangeCheck(unit, opt)
 				-- It's one of the filtered debuffs, so we have to iterate thru all debuffs to see if anything is curable
 				for i = 1, 40 do
 					local name
-					if not IsVanillaClassic and C_UnitAuras then
-						local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL|RAID")
+					if IsRetail and C_UnitAuras then
+						local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HARMFUL|RAID")
 						if auraData then
-							name = auraData.name
+							name = TPerl_SafeTableGet(auraData, "name")
 						end
 					else
 						name = UnitAura(unit, i, "HARMFUL|RAID")
@@ -878,33 +1660,93 @@ function TPerl_BlizzFrameDisable(self)
 	end
 end
 
--- smoothColor
-local function smoothColor(percentage, partyid)
-	local r, g, b, color
-	if not IsRetail then
-		if (percentage < 0.5) then
-			r = 1
-			g = min(1, max(0, 2 * percentage))
-			b = 0
-		else
-			g = 1
-			r = min(1, max(0, 2 * (1 - percentage)))
-			b = 0
+	-- smoothColor (Midnight-safe)
+	-- In Midnight, many unit-related values can become "secret" which cannot be used in math/logic.
+	-- For Retail/Midnight, prefer UnitHealthPercent with a curve (secure path) and only fall back to
+	-- numeric math when the value is accessible.
+	local _tperlHealthColorCurve
+	local function TPerl_GetHealthColorCurve()
+		if not _tperlHealthColorCurve then
+			local curve = C_CurveUtil.CreateColorCurve()
+			curve:SetType(Enum.LuaCurveType.Linear)
+			curve:AddPoint(0.0, CreateColor(1, 0, 0))
+			curve:AddPoint(0.3, CreateColor(1, 1, 0))
+			curve:AddPoint(0.7, CreateColor(0, 1, 0))
+			_tperlHealthColorCurve = curve
 		end
- else
-	 local curve = C_CurveUtil.CreateColorCurve()
-		curve:SetType(Enum.LuaCurveType.Linear)
-		curve:AddPoint(0.0, CreateColor(1, 0, 0))
-		curve:AddPoint(0.3, CreateColor(1, 1, 0))
-		curve:AddPoint(0.7, CreateColor(0, 1, 0))
-
-		--local unit = "player"
-		color = UnitHealthPercent(partyid, false, curve)
-		r, g, b = color:GetRGB()
+		return _tperlHealthColorCurve
 	end
- 
-	return r, g, b, color
-end
+
+	local function TPerl_RGBFromColor(c)
+		if not c then
+			return nil
+		end
+		if type(c) == "table" then
+			if c.GetRGB then
+				local r, g, b = c:GetRGB()
+				return r, g, b, c
+			elseif c.r ~= nil then
+				return c.r, c.g, c.b, c
+			elseif c[1] ~= nil then
+				return c[1], c[2], c[3], c
+			end
+		elseif type(c) == "userdata" and c.GetRGB then
+			local r, g, b = c:GetRGB()
+			return r, g, b, c
+		end
+		return nil
+	end
+
+	local function smoothColor(percentage, partyid)
+		local r, g, b, color
+
+		-- Classic branch expects a numeric percentage (0..1); guard against secret values
+		if not IsRetail then
+			if not TPerl_CanAccess(percentage) then
+				return 1, 1, 1
+			end
+			if (percentage < 0.5) then
+				r = 1
+				g = min(1, max(0, 2 * percentage))
+				b = 0
+			else
+				g = 1
+				r = min(1, max(0, 2 * (1 - percentage)))
+				b = 0
+			end
+			return r, g, b
+		end
+
+		-- Retail/Midnight: do NOT do any math on potentially secret 'percentage'. Use secure API when possible.
+		local curve = TPerl_GetHealthColorCurve()
+
+		-- If we have a valid unit token, let the secure API compute the value (safe even when health is secret).
+		if partyid and UnitExists(partyid) then
+			local result = UnitHealthPercent(partyid, false, curve)
+			r, g, b, color = TPerl_RGBFromColor(result)
+			if r then
+				return r, g, b, color
+			end
+		end
+
+		-- Fallback: only if the numeric percentage is accessible (e.g. threat scaledPercent)
+		if TPerl_CanAccess(percentage) then
+			local p = percentage
+			-- Some call-sites feed 0..100 (e.g. threat scaledPercent)
+			if p > 1 then
+				p = p / 100
+			end
+			p = min(1, max(0, p))
+			local result = curve:Evaluate(p)
+			r, g, b, color = TPerl_RGBFromColor(result)
+			if r then
+				return r, g, b, color
+			end
+		end
+
+		-- Final fallback: neutral (avoid errors)
+		return 1, 1, 1
+	end
 
 ---------------------------------
 --Smooth Health Bar Color      --
@@ -916,9 +1758,21 @@ function TPerl_SetSmoothBarColor(self, percentage)
 			r, g, b = smoothColor(percentage, self.partyid)
 		else
 			local c = conf.colour.bar
-			r = min(1, max(0, c.healthEmpty.r + ((c.healthFull.r - c.healthEmpty.r) * percentage)))
-			g = min(1, max(0, c.healthEmpty.g + ((c.healthFull.g - c.healthEmpty.g) * percentage)))
-			b = min(1, max(0, c.healthEmpty.b + ((c.healthFull.b - c.healthEmpty.b) * percentage)))
+			local pct = percentage
+				-- Some call sites (notably RaidHelper during secure header updates) can call
+				-- with a nil/unknown percentage. math.max/min will error on nil, so default.
+				if pct == nil then
+					pct = 1
+				end
+			if not TPerl_CanAccess(pct) then
+				pct = 1
+			elseif pct > 1 then
+				pct = pct / 100
+			end
+			pct = min(1, max(0, pct))
+			r = min(1, max(0, c.healthEmpty.r + ((c.healthFull.r - c.healthEmpty.r) * pct)))
+			g = min(1, max(0, c.healthEmpty.g + ((c.healthFull.g - c.healthEmpty.g) * pct)))
+			b = min(1, max(0, c.healthEmpty.b + ((c.healthFull.b - c.healthEmpty.b) * pct)))
 		end
 
   if not IsRetail then
@@ -932,9 +1786,11 @@ function TPerl_SetSmoothBarColor(self, percentage)
 			curve:AddPoint(0.3, CreateColor(1, 1, 0))
 			curve:AddPoint(0.7, CreateColor(0, 1, 0))
 
-			--local unit = "player"
-			local color = UnitHealthPercent(self.partyid, false, curve)
-			--self:SetStatusBarColor(color:GetRGB())
+				-- NOTE: UnitHealthPercent requires a valid unit token. Some bar objects can be created
+				-- before partyid is populated, so guard this call.
+				if self.partyid and UnitExists(self.partyid) then
+					local _ = UnitHealthPercent(self.partyid, false, curve)
+				end
 		end
 		
 		if (self.bg) then
@@ -986,7 +1842,7 @@ function TPerl_ColourHealthBar(self, healthPct)
 	end
 
  --Fix AFK Bug. Check Done in incorrect spot. Will likely move later.
- if UnitIsAFK(partyid) then
+ if TPerl_SafeBool(UnitIsAFK(partyid)) then
 		bar:SetStatusBarColor(0.2, 0.2, 0.2, 0.7)
 	else
 		if not conf.colour.bar.healthFull then
@@ -2120,59 +2976,263 @@ function TPerl_CheckDebuffs(self, unit, resetBorders)
 	Curses.Magic, Curses.Curse, Curses.Poison, Curses.Disease = nil, nil, nil, nil
 
 	local show
+	local secretBorderColour
 	local debuffCount = 0
+	local anyDebuff = false
+	local typedButSecret = false
 	local _, unitClass = UnitClass(unit)
 
-	for i = 1, 40 do
-		local name, dispelName
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HARMFUL")
-			if auraData then
-				name = auraData.name
-				dispelName = auraData.dispelName
-			end
-		else
-			local _
-			name, _, _, dispelName = UnitAura(unit, i, "HARMFUL")
+	-- Cache the last typed debuff highlight so it stays stable if dispel type becomes hidden/secret
+	local lastShow = self._tperlLastDebuffShow
+	local lastNames = self._tperlLastDebuffNames
+	local lastSpellIds = self._tperlLastDebuffSpellIds
+	local lastAuraIds = self._tperlLastDebuffAuraIds
+	local lastTS = self._tperlLastDebuffTS
+	local lastPresent = false
+
+
+local lastColor = self._tperlLastDebuffColor
+local lastColorNames = self._tperlLastDebuffColorNames
+local lastColorSpellIds = self._tperlLastDebuffColorSpellIds
+local lastColorAuraIds = self._tperlLastDebuffColorAuraIds
+local lastColorTS = self._tperlLastDebuffColorTS
+local lastColorPresent = false
+
+local secretColor
+local secretNames
+local secretSpellIds
+local secretAuraIds
+
+local typedNames
+	local typedSpellIds
+	local typedAuraIds
+
+local useNewAuraScan = (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex)
+for i = 1, 40 do
+	local name, dispelName, spellId, auraId
+	local auraData
+
+	if useNewAuraScan then
+		local okAD, ad = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "HARMFUL")
+		if (not okAD or not ad) then
+			break
 		end
+		auraData = ad
+		name = TPerl_SafeTableGet(ad, "name")
+		dispelName = TPerl_SafeTableGet(ad, "dispelName")
+		spellId = TPerl_SafeTableGet(ad, "spellId") or TPerl_SafeTableGet(ad, "spellID")
+		auraId = TPerl_SafeTableGet(ad, "auraInstanceID") or TPerl_SafeTableGet(ad, "auraInstanceId")
+	else
+		name, dispelName, spellId, auraId = TPerl_GetHarmfulAura(unit, i)
 		if not name then
 			break
 		end
+	end
 
-		if dispelName then
-			local exclude = ArcaneExclusions[name]
-			if not exclude or (type(exclude) == "table" and not exclude[unitClass]) then
-				Curses[dispelName] = dispelName
-				debuffCount = debuffCount + 1
+	-- Track if the previously-typed debuff is still present (even if its type becomes hidden later)
+		if lastShow then
+			if auraId and TPerl_CanAccess(auraId) and lastAuraIds and lastAuraIds[auraId] then
+				lastPresent = true
+			elseif spellId and TPerl_CanAccess(spellId) and lastSpellIds and lastSpellIds[spellId] then
+				lastPresent = true
+			elseif name and TPerl_CanAccess(name) and lastNames and lastNames[name] then
+				lastPresent = true
+			end
+		end
+
+
+if lastColor then
+	if auraId and TPerl_CanAccess(auraId) and lastColorAuraIds and lastColorAuraIds[auraId] then
+		lastColorPresent = true
+	elseif spellId and TPerl_CanAccess(spellId) and lastColorSpellIds and lastColorSpellIds[spellId] then
+		lastColorPresent = true
+	elseif name and TPerl_CanAccess(name) and lastColorNames and lastColorNames[name] then
+		lastColorPresent = true
+	end
+end
+
+		-- Midnight/Retail: aura fields such as name/dispelName may be "secret".
+		-- Do NOT index tables with secret values. If we can't read the dispel type,
+		-- still track that the unit has a harmful aura so border highlighting can work.
+		local exclude
+		if name and TPerl_CanAccess(name) then
+			exclude = ArcaneExclusions[name]
+		end
+		if not exclude or (type(exclude) == "table" and not exclude[unitClass]) then
+			anyDebuff = true
+
+-- Midnight/Retail: dispelType may be a secret object. Convert dispelType -> secret colour via ColorCurve.
+local sCol, sAuraId, sSpellId, sName
+if useNewAuraScan and auraData then
+	sCol, sAuraId, sSpellId, sName = TPerl_GetDebuffColorByAuraData(unit, auraData)
+else
+	sCol, sAuraId, sSpellId, sName = TPerl_GetDebuffColorByAuraIndex(unit, i)
+end
+if sCol then
+	if not secretColor then
+		secretColor = sCol
+	end
+	if not secretNames then
+		secretNames = { }
+		secretSpellIds = { }
+		secretAuraIds = { }
+	end
+	if sName and TPerl_CanAccess(sName) then
+		secretNames[sName] = true
+	end
+	if sSpellId and TPerl_CanAccess(sSpellId) then
+		secretSpellIds[sSpellId] = true
+	end
+	if sAuraId and TPerl_CanAccess(sAuraId) then
+		secretAuraIds[sAuraId] = true
+	end
+end
+			if dispelName then
+				if TPerl_CanAccess(dispelName) then
+					local dt = TPerl_NormalizeDispelType(dispelName)
+					if (dt) then
+						Curses[dt] = dt
+						debuffCount = debuffCount + 1
+
+						-- Remember typed debuffs we can identify this pass (used for stable caching)
+						if not typedNames then
+							typedNames = { }
+							typedSpellIds = { }
+						end
+						if name and TPerl_CanAccess(name) then
+							typedNames[name] = true
+						end
+						if spellId then
+							typedSpellIds[spellId] = true
+						end
+					end
+				else
+					-- Midnight/Retail can hide dispel type as a secret value; remember that a typed debuff exists.
+					typedButSecret = true
+				end
 			end
 		end
 	end
 
 	if debuffCount > 0 then
-		-- 2.2.6 - Very (very very) slight speed optimazation by having a function per class which is set at startup
+		-- 2.2.6 - Very (very very) slight speed optimization by having a function per class which is set at startup
 		show = getShow(Curses)
-	end
 
-	local colour, borderColour
-	if show then
-		colour = DebuffTypeColor[show]
-		colour.a = 1
-
-		if conf.highlightDebuffs.border then
-			borderColour = colour
-		else
-			borderColour = conf.colour.border
+		-- Cache last typed highlight so it stays stable if the dispel type becomes hidden/secret on later refreshes.
+		if show and show ~= "none" then
+			self._tperlLastDebuffShow = show
+			self._tperlLastDebuffTS = GetTime()
+			self._tperlLastDebuffNames = typedNames
+			self._tperlLastDebuffSpellIds = typedSpellIds
+				self._tperlLastDebuffAuraIds = typedAuraIds
 		end
 	else
-		colour = conf.colour.frame
-		borderColour = conf.colour.border
+		-- No accessible typed debuffs this pass.
+		-- If we still see the previously typed debuff (by name/spellId), keep the last highlight stable.
+		-- If the type is hidden/secret and we can't verify presence, keep it briefly to avoid flicker.
+		if lastShow and (lastPresent or (typedButSecret and lastTS and (GetTime() - lastTS) < 2)) then
+			show = lastShow
+		else
+			-- If we have debuffs but none are typed (e.g. bleeds), optionally use the generic 'none' colour
+			-- when not restricted to 'only curable by my class'.
+			if anyDebuff and ((not conf.highlightDebuffs) or (not conf.highlightDebuffs.class) or typedButSecret) then
+				show = "none"
+			end
+			-- No sign of typed debuffs -> clear cached typed highlight to avoid stale colours.
+			self._tperlLastDebuffShow = nil
+			self._tperlLastDebuffTS = nil
+			self._tperlLastDebuffNames = nil
+			self._tperlLastDebuffSpellIds = nil
+				self._tperlLastDebuffAuraIds = nil
+		end
 	end
 
-	if show and conf.highlightDebuffs.frame then
+
+
+-- Secret/forbidden dispelType support via ColorCurve (Midnight/Retail)
+-- If we couldn't derive a readable dispel name, try to keep a stable border colour via secret dispelType -> curve.
+if (not show or show == "none") then
+	if secretColor then
+		if lastColor and lastColorPresent then
+			secretBorderColour = lastColor
+		else
+			secretBorderColour = secretColor
+			self._tperlLastDebuffColor = secretColor
+			self._tperlLastDebuffColorTS = GetTime()
+			self._tperlLastDebuffColorNames = secretNames
+			self._tperlLastDebuffColorSpellIds = secretSpellIds
+			self._tperlLastDebuffColorAuraIds = secretAuraIds
+		end
+	elseif lastColor and (lastColorPresent or (anyDebuff and lastColorTS and (GetTime() - lastColorTS) < 2)) then
+		-- Keep briefly to avoid flicker if dispelType becomes hidden intermittently.
+		secretBorderColour = lastColor
+	else
+		-- Clear stale secret colour cache.
+		self._tperlLastDebuffColor = nil
+		self._tperlLastDebuffColorTS = nil
+		self._tperlLastDebuffColorNames = nil
+		self._tperlLastDebuffColorSpellIds = nil
+		self._tperlLastDebuffColorAuraIds = nil
+	end
+end
+	-- No debuffs at all -> clear cache
+	if not anyDebuff then
+		self._tperlLastDebuffShow = nil
+		self._tperlLastDebuffTS = nil
+		self._tperlLastDebuffNames = nil
+		self._tperlLastDebuffSpellIds = nil
+				self._tperlLastDebuffAuraIds = nil
+
+self._tperlLastDebuffColor = nil
+self._tperlLastDebuffColorTS = nil
+self._tperlLastDebuffColorNames = nil
+self._tperlLastDebuffColorSpellIds = nil
+self._tperlLastDebuffColorAuraIds = nil
+	end
+
+
+	
+
+local colour, borderColour
+if secretBorderColour then
+	-- Secret dispelType -> curve colour (Midnight/Retail)
+	if conf.highlightDebuffs.frame then
+		colour = secretBorderColour
+	else
+		colour = conf.colour.frame
+	end
+	if conf.highlightDebuffs.border then
+		borderColour = secretBorderColour
+	else
+		borderColour = conf.colour.border
+	end
+elseif show then
+	colour = TPerl_GetDebuffTypeColorSafe(show)
+	if conf.highlightDebuffs.border then
+		borderColour = colour
+	else
+		borderColour = conf.colour.border
+	end
+else
+	colour = conf.colour.frame
+	borderColour = conf.colour.border
+end
+
+
+	-- IMPORTANT:
+	-- When highlighting *only the border*, combat-flash can overwrite the border colour and
+	-- then restore it to the default border colour when the flash ends.
+	-- To keep the debuff border highlight stable, ensure we set forcedColour whenever the
+	-- border highlight is active.
+	if (show or secretBorderColour) and conf.highlightDebuffs.border then
 		self.forcedColour = borderColour
-		bgDef.edgeFile = curseEdge
 	else
 		self.forcedColour = nil
+	end
+
+	if (show or secretBorderColour) and conf.highlightDebuffs.frame then
+		bgDef.edgeFile = curseEdge
+	else
 		--bgDef.edgeFile = normalEdge
 
 		bgDef.edgeFile = self.edgeFile or normalEdge
@@ -2527,141 +3587,135 @@ end
 
 -- BuffException
 local showInfo
+
 local function BuffException(unit, index, filter, func, exceptions, raidFrames)
-	local name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId
-	if filter ~= "HELPFUL|RAID" and filter ~= "HARMFUL|RAID" then
-		-- Not filtered, just return it
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = func(unit, index, filter)
-			if auraData then
-				name = auraData.name
-				icon = auraData.icon
-				applications = auraData.applications
-				dispelName = auraData.dispelName
-				duration = auraData.duration
-				expirationTime = auraData.expirationTime
-				sourceUnit = auraData.sourceUnit
-				isStealable = auraData.isStealable
-				nameplateShowPersonal = auraData.nameplateShowPersonal
-				spellId = auraData.spellId
+	-- Midnight/Retail note:
+	-- C_UnitAuras can return auraData where some fields (name/icon/etc) are "secret" and appear as nil
+	-- in tainted addon code. Callers often treat (name == nil) as end-of-list, so we must return a
+	-- stable placeholder name when an aura exists but its name is not accessible.
+	local function ReadAura(u, i, f)
+		if (IsRetail and C_UnitAuras and func) then
+			local auraData = func(u, i, f)
+			if (not auraData) then
+				return nil
+			end
+
+			local name = TPerl_SafeTableGet(auraData, "name")
+			local icon = TPerl_SafeTableGet(auraData, "icon")
+			local applications = TPerl_SafeTableGet(auraData, "applications")
+			local dispelName = TPerl_SafeTableGet(auraData, "dispelName")
+			local duration = TPerl_SafeTableGet(auraData, "duration")
+			local expirationTime = TPerl_SafeTableGet(auraData, "expirationTime")
+			local sourceUnit = TPerl_SafeTableGet(auraData, "sourceUnit")
+			local isStealable = TPerl_SafeTableGet(auraData, "isStealable")
+			local nameplateShowPersonal = TPerl_SafeTableGet(auraData, "nameplateShowPersonal")
+			local spellId = TPerl_SafeTableGet(auraData, "spellId")
+			local auraInstanceID = TPerl_SafeTableGet(auraData, "auraInstanceID")
+
+			if (not name) then
+				-- Use a stable placeholder (never used as a lookup key) so loops don't stop early.
+				local aid = auraInstanceID
+				if (aid and TPerl_CanAccess(aid)) then
+					name = "\0" .. aid
+				else
+					name = "\0" .. i
+				end
+			end
+
+			return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, auraInstanceID
+		end
+
+		-- Classic/Mists path
+		local name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId = func(u, i, f)
+		if (not name) then
+			return nil
+		end
+		return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, nil
+	end
+
+	local raidFiltered = (filter == "HELPFUL|RAID" or filter == "HARMFUL|RAID")
+	if (not raidFiltered) then
+		local name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId = ReadAura(unit, index, filter)
+		return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, index
+	end
+
+	local name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, auraInstanceID = ReadAura(unit, index, filter)
+	if (not name) then
+		return nil
+	end
+
+	-- When WoW returns an aura in the filtered list, we need its index in the base list for tooltips.
+	if (icon) then
+		local baseFilter = (filter == "HELPFUL|RAID") and "HELPFUL" or "HARMFUL"
+
+		if (IsRetail and C_UnitAuras and auraInstanceID and TPerl_CanAccess(auraInstanceID)) then
+			for i = 1, 40 do
+				local a = func(unit, i, baseFilter)
+				if (not a) then
+					break
+				end
+				local aid = a.auraInstanceID
+				if (aid and TPerl_CanAccess(aid) and aid == auraInstanceID) then
+					index = i
+					break
+				end
 			end
 		else
-			name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId = func(unit, index, filter)
-		end
-		return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, index
-	end
-
-	if not IsVanillaClassic and C_UnitAuras then
-		local auraData = func(unit, index, filter)
-		if auraData then
-			name = auraData.name
-			icon = auraData.icon
-			applications = auraData.applications
-			dispelName = auraData.dispelName
-			duration = auraData.duration
-			expirationTime = auraData.expirationTime
-			sourceUnit = auraData.sourceUnit
-			isStealable = auraData.isStealable
-			nameplateShowPersonal = auraData.nameplateShowPersonal
-			spellId = auraData.spellId
-		end
-	else
-		name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId = func(unit, index, filter)
-	end
-	if icon then
-		-- We need the index of the buff unfiltered later for tooltips
-		for i = 1, 40 do
-			local name, icon, applications, sourceUnit
-			if not IsVanillaClassic and C_UnitAuras then
-				local auraData = func(unit, i, filter)
-				if auraData then
-					name = auraData.name
-					icon = auraData.icon
-					applications = auraData.applications
-					sourceUnit = auraData.sourceUnit
+			-- Fallback for non-retail where values are not secret
+			local origName, origIcon, origApplications, origSourceUnit = name, icon, applications, sourceUnit
+			for i = 1, 40 do
+				local n, ic, ap, _, _, _, su = func(unit, i, baseFilter)
+				if (not n) then
+					break
 				end
-			else
-				local _
-				name, icon, applications, _, _, _, sourceUnit = func(unit, i, filter)
-			end
-			if not name then
-				break
-			end
-			if name == name and icon == icon and applications == applications and sourceUnit == sourceUnit then
-				index = i
-				break
+				if (n == origName and ic == origIcon and ap == origApplications and su == origSourceUnit) then
+					index = i
+					break
+				end
 			end
 		end
 
 		return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, index
 	end
 
-	-- See how many filtered buffs WoW has returned by default
+	-- No aura found in the filtered list for this index. Determine how many filtered auras exist by default...
 	local normalBuffFilterCount = 0
 	for i = 1, 40 do
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = func(unit, i, filter == "HELPFUL" and "HELPFUL|RAID" or (filter == "HARMFUL" and "HARMFUL|RAID" or filter))
-			if auraData then
-				name = auraData.name
+		if (IsRetail and C_UnitAuras) then
+			local a = func(unit, i, filter)
+			if (not a) then
+				normalBuffFilterCount = i - 1
+				break
 			end
 		else
-			name = func(unit, i, filter == "HELPFUL" and "HELPFUL|RAID" or (filter == "HARMFUL" and "HARMFUL|RAID" or filter))
-		end
-		if not name then
-			normalBuffFilterCount = i - 1
-			break
+			local n = func(unit, i, filter)
+			if (not n) then
+				normalBuffFilterCount = i - 1
+				break
+			end
 		end
 	end
 
-	-- Nothing found by default, so look for exceptions that we want to tack onto the end
-	local unitClass
+	-- ...then tack on exception auras from the base list (HELPFUL/HARMFUL) after the default filtered list.
+	local baseFilter = (filter == "HELPFUL|RAID") and "HELPFUL" or "HARMFUL"
 	local foundValid = 0
-	local classExceptions = exceptions[playerClass]
-	local allExceptions = exceptions.ALL
+	local playerClass = select(2, UnitClass("player"))
+
 	for i = 1, 40 do
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = func(unit, i, filter)
-			if auraData then
-				name = auraData.name
-				icon = auraData.icon
-				applications = auraData.applications
-				dispelName = auraData.dispelName
-				duration = auraData.duration
-				expirationTime = auraData.expirationTime
-				sourceUnit = auraData.sourceUnit
-				isStealable = auraData.isStealable
-				nameplateShowPersonal = auraData.nameplateShowPersonal
-				spellId = auraData.spellId
-			end
-		else
-			name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId = func(unit, i, filter)
-		end
-		if not name then
+		local n, ic, ap, dt, dur, exp, su, steal, np, sid = ReadAura(unit, i, baseFilter)
+		if (not n) then
 			break
 		end
 
-		local good
-		if classExceptions then
-			good = classExceptions[name]
-		end
-		if not good and allExceptions then
-			good = allExceptions[name]
-		end
-
-		if type(good) == "string" then
-			if not unitClass then
-				local _, class = UnitClass(unit)
-				unitClass = class
-			end
-			if good ~= unitClass then
-				good = nil
-			end
-		end
-
-		if good then
-			foundValid = foundValid + 1
-			if foundValid + normalBuffFilterCount == index then
-				return name, icon, applications, dispelName, duration, expirationTime, sourceUnit, isStealable, nameplateShowPersonal, spellId, i
+		-- Only consider exceptions when we can safely use the real name as a lookup key.
+		if (TPerl_CanAccess(n) and strsub(n, 1, 1) ~= "\0") then
+			if (exceptions[playerClass] and exceptions[playerClass][n]) or (exceptions[1] and exceptions[1][n]) then
+				if (not raidFrames or not raidFrames.Ignores or not raidFrames.Ignores[n]) then
+					foundValid = foundValid + 1
+					if (foundValid + normalBuffFilterCount == index) then
+						return n, ic, ap, dt, dur, exp, su, steal, np, sid, i
+					end
+				end
 			end
 		end
 	end
@@ -2669,17 +3723,23 @@ end
 
 -- DebuffException
 local function DebuffException(unit, start, filter, func, raidFrames)
-	local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, index
 	local valid = 0
+	local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellId, index
+	local i
+
 	for i = 1, 40 do
-		name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, index = BuffException(unit, i, filter, func, DebuffExceptions, raidFrames)
-		if not name then
+		name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellId, index = BuffException(unit, i, filter, func, DebuffExceptions, raidFrames)
+		if (not name) then
 			break
 		end
-		if not SeasonalDebuffs[name] and not (raidFrames and RaidFrameIgnores[name]) then
+
+		-- skip seasonal debuffs by name when available (ignore placeholder secret names)
+		if (TPerl_CanAccess(name) and strsub(name, 1, 1) ~= "\0" and SeasonalDebuffs[name]) then
+			-- skip
+		else
 			valid = valid + 1
-			if valid == start then
-				return name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, index
+			if (valid == start) then
+				return name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellId, index
 			end
 		end
 	end
@@ -2687,21 +3747,21 @@ end
 
 -- TPerl_UnitBuff
 function TPerl_UnitBuff(unit, index, filter, raidFrames)
-	return BuffException(unit, index, filter, (IsVanillaClassic and unit == "target") and UnitAuraWithBuffs or ((not IsVanillaClassic and C_UnitAuras) and C_UnitAuras.GetAuraDataByIndex or UnitAura), BuffExceptions, raidFrames)
+	return BuffException(unit, index, filter, (IsVanillaClassic and unit == "target") and UnitAuraWithBuffs or (IsRetail and C_UnitAuras and TPerl_SafeGetAuraDataByIndex) or UnitAura, BuffExceptions, raidFrames)
 end
 
 -- TPerl_UnitDebuff
 function TPerl_UnitDebuff(unit, index, filter, raidFrames)
 	if (conf.buffs.ignoreSeasonal or raidFrames) then
-		return DebuffException(unit, index, filter, (not IsVanillaClassic and C_UnitAuras) and C_UnitAuras.GetAuraDataByIndex or UnitAura, raidFrames)
+		return DebuffException(unit, index, filter, (IsRetail and C_UnitAuras and TPerl_SafeGetAuraDataByIndex) or UnitAura, raidFrames)
 	end
-	return BuffException(unit, index, filter, (not IsVanillaClassic and C_UnitAuras) and C_UnitAuras.GetAuraDataByIndex or UnitAura, DebuffExceptions, raidFrames)
+	return BuffException(unit, index, filter, (IsRetail and C_UnitAuras and TPerl_SafeGetAuraDataByIndex) or UnitAura, DebuffExceptions, raidFrames)
 end
 
 -- TPerl_TooltipSetUnitBuff
 -- Retreives the index of the actual unfiltered buff, and uses this on unfiltered tooltip call
 function TPerl_TooltipSetUnitBuff(self, unit, ind, filter, raidFrames)
-	local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, index = BuffException(unit, ind, filter, (IsVanillaClassic and unit == "target") and UnitAuraWithBuffs or ((not IsVanillaClassic and C_UnitAuras) and C_UnitAuras.GetAuraDataByIndex or UnitAura), BuffExceptions, raidFrames)
+	local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, index = BuffException(unit, ind, filter, (IsVanillaClassic and unit == "target") and UnitAuraWithBuffs or (IsRetail and C_UnitAuras and TPerl_SafeGetAuraDataByIndex) or UnitAura, BuffExceptions, raidFrames)
 	if (name and index) then
 		if (Utopia_SetUnitBuff) then
 			Utopia_SetUnitBuff(self, unit, index)
@@ -3048,11 +4108,11 @@ local function AuraButtonOnShow(self)
 
 	local duration, expirationTime, sourceUnit
 	if not IsVanillaClassic and C_UnitAuras then
-		local auraData = C_UnitAuras.GetAuraDataByIndex("player", self.xindex, self.xfilter)
+		local auraData = TPerl_SafeGetAuraDataByIndex("player", self.xindex, self.xfilter)
 		if auraData then
-			duration = auraData.duration
-			expirationTime = auraData.expirationTime
-			sourceUnit = auraData.sourceUnit
+			duration = TPerl_SafeTableGet(auraData, "duration")
+			expirationTime = TPerl_SafeTableGet(auraData, "expirationTime")
+			sourceUnit = TPerl_SafeTableGet(auraData, "sourceUnit")
 		end
 	else
 		local _
@@ -3316,7 +4376,7 @@ function TPerl_Unit_BuffPositions(self, buffList1, buffList2, size1, size2)
 	if not IsRetail then
 	 optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, (UnitPowerMax(self.partyid) > 0) and 1 or 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
 	else
-	local optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
+	optMix = format("%d%d%d%d%d%d%d", self.perlBuffs or 0, self.perlDebuffs or 0, self.perlBuffsMine or 0, self.perlDebuffsMine or 0, UnitCanAttack("player", self.partyid) and 1 or 0, 0, (self.creatureTypeFrame and self.creatureTypeFrame:IsVisible()) and 1 or 0)
 	end
 	if (optMix ~= self.buffOptMix) then
 		if self.partyid ~= "player" then
@@ -3401,6 +4461,20 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 
 		if (self.conf.buffs.enable and maxBuffs and maxBuffs > 0) then
 			local buffIconIndex = 1
+			local playerBuffByID
+			if (IsRetail and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then
+				playerBuffByID = { }
+				for i = 1, maxBuffs do
+					local aura = TPerl_SafeGetAuraDataByIndex(partyid, i, "HELPFUL|PLAYER")
+					if (not aura) then
+						break
+					end
+					local aid = aura.auraInstanceID
+					if (aid) then
+						playerBuffByID[aid] = true
+					end
+				end
+			end
 			self.buffFrame:Show()
 			for mine = 1, 2 do
 				if (self.conf.buffs.onlyMine and mine == 2) then
@@ -3426,41 +4500,85 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 						break
 					end
 
-					local isPlayer
-					if (self.conf.buffs.bigpet) then
-						isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
-					else
-						isPlayer = unitCaster == "player" or unitCaster == "vehicle"
+						-- Midnight: grab auraInstanceID (NeverSecret) so we can ask the engine for displayable info
+						-- (stack count, duration) even when UnitAura results are secret.
+						local auraInstanceID
+						if (IsRetail and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then
+							local aura = TPerl_SafeGetAuraDataByIndex(partyid, buffnum, filter)
+							auraInstanceID = aura and aura.auraInstanceID
+						end
+
+					local isPlayer = false
+					local canSteal = TPerl_SafeBool(canStealOrPurge)
+
+					-- Midnight: Prefer auraInstanceID mapping to decide if this buff is ours (avoids secret-string caster issues).
+					if (playerBuffByID and auraInstanceID and playerBuffByID[auraInstanceID]) then
+						isPlayer = true
 					end
 
-					if (icon and (((mine == 1) and (isPlayer or canStealOrPurge)) or ((mine == 2) and not (isPlayer or canStealOrPurge)))) then
+					if (unitCaster ~= nil and TPerl_CanAccess(unitCaster)) then
+						if (self.conf.buffs.bigpet) then
+							isPlayer = (unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle")
+						else
+							isPlayer = (unitCaster == "player" or unitCaster == "vehicle")
+						end
+					elseif (nameplateShowPersonal ~= nil and TPerl_CanAccess(nameplateShowPersonal)) then
+						-- Fallback when caster is a "secret string"
+						isPlayer = nameplateShowPersonal and true or false
+					end
+
+					if (icon and (((mine == 1) and (isPlayer or canSteal)) or ((mine == 2) and not (isPlayer or canSteal)))) then
 						local button = TPerl_GetBuffButton(self, buffIconIndex, 0, true, buffnum)
 						button.filter = filter
 						button:SetAlpha(1)
 
 						buffs = buffs + 1
 
-						button.icon:SetTexture(icon)
-						if (count > 1) then
-							button.count:SetText(count)
-							button.count:Show()
-						else
-							button.count:Hide()
-						end
+							button.icon:SetTexture(icon)
+							TPerl_SetAuraStackText(button, count, partyid, auraInstanceID)
 
-						-- Handle cooldowns
-						if (button.cooldown) then
-							if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
-								local start = expirationTime - duration
-								TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
-							else
-								button.cooldown:Hide()
-							end
+	-- Handle cooldowns
+	if (button.cooldown) then
+		local canCooldown = (conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny))
+		if (canCooldown) then
+			-- If aura timing is accessible, keep the classic path (lets our custom countdown work).
+			if (duration and expirationTime and TPerl_CanAccess(duration) and TPerl_CanAccess(expirationTime) and duration > 0 and expirationTime > 0) then
+				local start = expirationTime - duration
+				TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+			else
+				-- Midnight: fall back to DurationObject for restricted/secret aura timing.
+				-- We can't run our own countdown on secret time; allow Blizzard to render countdown numbers.
+				if (auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDuration and button.cooldown.SetCooldownFromDurationObject) then
+					local durObj
+						if (TPerl_UnitTokenAllowsC_UnitAuras(partyid)) then
+							local okDur, d = pcall(C_UnitAuras.GetAuraDuration, partyid, auraInstanceID)
+							if (okDur) then durObj = d end
 						end
-
+					if (durObj) then
+						button.cooldown.endTime = nil
+						button.cooldown:SetScript("OnUpdate", nil)
+						if (button.cooldown.countdown) then
+							button.cooldown.countdown:Hide()
+						end
+						button.cooldown:SetCooldownFromDurationObject(durObj, true)
+						if (conf.buffs.countdown or conf.buffs.blizzard) then
+							TPerl_EnableBlizzardCooldownText(button.cooldown)
+						end
+						button.cooldown:Show()
+					else
+						button.cooldown:Hide()
+					end
+				else
+					button.cooldown:Hide()
+				end
+			end
+		else
+			button.cooldown:Hide()
+		end
+	end
 						button:Show()
 
-						if (canStealOrPurge) then --  and UnitCanAttack("player", partyid)
+						if (canSteal) then
 							if (not button.steal) then
 								button.steal = CreateFrame("Frame", nil, button, BackdropTemplateMixin and "BackdropTemplate")
 								button.steal:SetPoint("TOPLEFT", -2, 2)
@@ -3485,7 +4603,6 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 
 							button.steal:Show()
 							button.steal.anim:Play()
-							--button.steal:SetScript("OnUpdate", fixMeBlizzard) -- Workaround for Play not always working...
 						else
 							if (button.steal) then
 								button.steal:Hide()
@@ -3494,7 +4611,7 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 
 						lastIcon = buffIconIndex
 
-						if ((self.conf.buffs.big and isPlayer) or (self.conf.buffs.bigStealable and canStealOrPurge)) then
+						if ((self.conf.buffs.big and isPlayer) or (self.conf.buffs.bigStealable and canSteal)) then
 							buffsMine = buffsMine + 1
 							button.big = true
 							button:SetScale((self.conf.buffs.size * 2) / 32)
@@ -3521,6 +4638,21 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 
 		if (self.conf.debuffs.enable and maxDebuffs and maxDebuffs > 0) then
 			local buffIconIndex = 1
+			local playerDebuffByID
+			if (IsRetail and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then
+				playerDebuffByID = { }
+				-- Use auraInstanceID (NeverSecret) so we can reliably detect our debuffs even when UnitAura returns secret values
+				for i = 1, maxDebuffs do
+					local aura = TPerl_SafeGetAuraDataByIndex(partyid, i, "HARMFUL|PLAYER")
+					if (not aura) then
+						break
+					end
+					local aid = aura.auraInstanceID
+					if (aid) then
+						playerDebuffByID[aid] = true
+					end
+				end
+			end
 			self.debuffFrame:Show()
 			lastIcon = 0
 			for mine = 1, 2 do
@@ -3533,8 +4665,10 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 				end
 
 				for buffnum = 1, maxDebuffs do
-					local filter = (isFriendly and curableOnly == 1) and "HARMFUL|RAID" or "HARMFUL"
-					local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID = TPerl_UnitDebuff(partyid, buffnum, filter)
+					-- NOTE: "HARMFUL|RAID" is not a reliable way to filter "curable" debuffs.
+					-- Always scan normal harmful auras, then apply our own "curable" filter using the debuffType.
+					local filter = "HARMFUL"
+					local name, icon, count, debuffType, duration, expirationTime, unitCaster, canStealOrPurge, nameplateShowPersonal, spellID, auraIndex = TPerl_UnitDebuff(partyid, buffnum, filter)
 
 					if (not name) then
 						if (mine == 1) then
@@ -3543,42 +4677,120 @@ function TPerl_Unit_UpdateBuffs(self, maxBuffs, maxDebuffs, castableOnly, curabl
 						break
 					end
 
-					local isPlayer
-					if (self.conf.buffs.bigpet) then
-						isPlayer = unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle"
-					else
-						isPlayer = unitCaster == "player"
+local isPlayer = false
+local auraInstanceID
+-- Midnight: prefer auraInstanceID (NeverSecret) + a PLAYER-filter scan to decide if the aura is ours.
+if (IsRetail and C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then
+	local aura = TPerl_SafeGetAuraDataByIndex(partyid, auraIndex or buffnum, filter)
+	auraInstanceID = aura and aura.auraInstanceID
+	if (playerDebuffByID and auraInstanceID and playerDebuffByID[auraInstanceID]) then
+		isPlayer = true
+	end
+end
+					if (not isPlayer) then
+						if (unitCaster ~= nil and TPerl_CanAccess(unitCaster)) then
+							if (self.conf.buffs.bigpet) then
+								isPlayer = (unitCaster == "player" or unitCaster == "pet" or unitCaster == "vehicle")
+							else
+								isPlayer = (unitCaster == "player")
+							end
+						elseif (nameplateShowPersonal ~= nil and TPerl_CanAccess(nameplateShowPersonal)) then
+							-- Fallback when caster is a "secret string"
+							isPlayer = nameplateShowPersonal and true or false
+						end
+					end
+					local showDebuff = true
+					-- "Curable" option (party/pet/etc): show only dispellable types, even if our class can't dispel.
+					-- Apply this only for friendly units (where this option makes sense).
+					if (isFriendly and curableOnly == 1) then
+						local dt = TPerl_NormalizeDispelType(debuffType)
+						if (dt) then
+							showDebuff = (dt == "Magic" or dt == "Curse" or dt == "Disease" or dt == "Poison")
+						else
+							-- If the type is restricted/secret/unknown, don't treat it as "curable".
+							showDebuff = false
+						end
 					end
 
-					if (icon and (((mine == 1) and isPlayer) or ((mine == 2) and not isPlayer))) then
+					if (showDebuff and icon and (((mine == 1) and isPlayer) or ((mine == 2) and not isPlayer))) then
 						local button = TPerl_GetBuffButton(self, buffIconIndex, 1, true, buffnum)
 						button.filter = filter
 						button:SetAlpha(1)
 
 						debuffs = debuffs + 1
 
-						button.icon:SetTexture(icon)
-						if ((count or 0) > 1) then
-							button.count:SetText(count)
-							button.count:Show()
-						else
-							button.count:Hide()
-						end
+							button.icon:SetTexture(icon)
+							TPerl_SetAuraStackText(button, count, partyid, auraInstanceID)
 
-						local borderColor = DebuffTypeColor[(debuffType or "none")]
+						local debuffKey = "none"
+						local dt = TPerl_NormalizeDispelType(debuffType)
+						if (dt) then
+							debuffKey = dt
+						elseif (TPerl_CanAccess(debuffType)) then
+							-- Accessible but unknown string: keep it; colour lookup will fall back to 'none'
+							debuffKey = debuffType
+						end
+						local borderColor = TPerl_GetDebuffTypeColorSafe(debuffKey)
 						button.border:SetVertexColor(borderColor.r, borderColor.g, borderColor.b)
-
-						-- Handle cooldowns
-						if (button.cooldown) then
-							if (duration and duration > 0 and expirationTime and expirationTime > 0 and conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny)) then
-								local start = expirationTime - duration
-								TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
-							else
-								button.cooldown:Hide()
-							end
+												-- Handle cooldowns
+							if (button.cooldown) then
+								local canCooldown = (conf.buffs.cooldown and (isPlayer or conf.buffs.cooldownAny))
+								if (canCooldown) then
+									local usedDurationObj
+									-- Midnight: prefer DurationObject; if values aren't secret, also feed SetCooldown for text addons.
+									if (auraInstanceID and C_UnitAuras and C_UnitAuras.GetAuraDuration and button.cooldown.SetCooldownFromDurationObject) then
+										local durObj
+						if (TPerl_UnitTokenAllowsC_UnitAuras(partyid)) then
+							local okDur, d = pcall(C_UnitAuras.GetAuraDuration, partyid, auraInstanceID)
+							if (okDur) then durObj = d end
 						end
+										if (durObj) then
+											usedDurationObj = true
+											-- Clear any old per-icon countdown state; we'll re-enable it below when safe.
+											button.cooldown.endTime = nil
+											button.cooldown:SetScript("OnUpdate", nil)
+											if (button.cooldown.countdown) then
+												button.cooldown.countdown:Hide()
+											end
 
-						lastIcon = buffIconIndex
+											if (durObj.HasSecretValues and not durObj:HasSecretValues()) then
+												local start = durObj.GetStartTime and durObj:GetStartTime()
+												local total = durObj.GetTotalDuration and durObj:GetTotalDuration()
+												local modRate = (durObj.GetModRate and durObj:GetModRate()) or 1
+												if (start and total and TPerl_CanAccess(start) and TPerl_CanAccess(total) and total > 0) then
+													button.cooldown:SetCooldown(start, total, modRate)
+													button.cooldown.endTime = start + total
+													if (conf.buffs.countdown and (isPlayer or conf.buffs.countdownAny)) then
+														button.cooldown:SetScript("OnUpdate", BuffCooldownDisplay)
+													end
+												else
+													button.cooldown:SetCooldownFromDurationObject(durObj, true)
+												end
+											else
+														button.cooldown:SetCooldownFromDurationObject(durObj, true)
+														-- Custom countdown can't run on secret time; allow Blizzard to render the countdown numbers.
+														if (conf.buffs.countdown or conf.buffs.blizzard) then
+															TPerl_EnableBlizzardCooldownText(button.cooldown)
+														end
+											end
+
+											button.cooldown:Show()
+										end
+									end
+									if (not usedDurationObj) then
+										if (duration and expirationTime and TPerl_CanAccess(duration) and TPerl_CanAccess(expirationTime) and duration > 0 and expirationTime > 0) then
+											local start = expirationTime - duration
+											TPerl_CooldownFrame_SetTimer(button.cooldown, start, duration, 1, isPlayer)
+										else
+											button.cooldown:Hide()
+										end
+									end
+								else
+									button.cooldown:Hide()
+								end
+							end
+
+lastIcon = buffIconIndex
 						button:Show()
 
 						if (self.conf.debuffs.big and isPlayer) then
@@ -3627,12 +4839,20 @@ function TPerl_SetBuffSize(self)
 	for i = 1, 40 do
 		buff = self.buffFrame.buff and self.buffFrame.buff[i]
 		if (buff) then
-			buff:SetScale(sizeBuff / 32)
+			if (buff.big) then
+				buff:SetScale((sizeBuff * 2) / 32)
+			else
+				buff:SetScale(sizeBuff / 32)
+			end
 		end
 
 		buff = self.buffFrame.debuff and self.buffFrame.debuff[i]
 		if (buff) then
-			buff:SetScale(sizeDebuff / 32)
+			if (buff.big) then
+				buff:SetScale((sizeDebuff * 2) / 32)
+			else
+				buff:SetScale(sizeDebuff / 32)
+			end
 		end
 
 		buff = self.buffFrame.tempEnchant and self.buffFrame.tempEnchant[i]
@@ -3829,12 +5049,24 @@ function TPerl_Unit_UpdatePortrait(self, force)
 		if (self.conf.portrait3D and UnitIsVisible(self.partyid)) then
 			self.portraitFrame.portrait:Hide()
 			local guid = UnitGUID(self.partyid)
-			if force or guid ~= self.portraitFrame.portrait3D.guid or not self.portraitFrame.portrait3D:IsShown() then
+			local guidAcc = TPerl_CanAccess(guid)
+			local oldGuid = self.portraitFrame.portrait3D.guid
+			local oldAcc = TPerl_CanAccess(oldGuid)
+			local needsUpdate = force or (not self.portraitFrame.portrait3D:IsShown())
+			if (not needsUpdate) then
+				if (guidAcc and oldAcc) then
+					needsUpdate = (guid ~= oldGuid)
+				else
+					needsUpdate = true
+				end
+			end
+			if needsUpdate then
 				self.portraitFrame.portrait3D:Show()
 				self.portraitFrame.portrait3D:ClearModel()
 				self.portraitFrame.portrait3D:SetUnit(self.partyid)
 				self.portraitFrame.portrait3D:SetPortraitZoom(1)
-				self.portraitFrame.portrait3D.guid = guid
+				-- Don't store secret GUIDs; comparisons later would error in tainted execution
+				self.portraitFrame.portrait3D.guid = guidAcc and guid or nil
 			end
 		else
 			self.portraitFrame.portrait:Show()
@@ -4287,14 +5519,64 @@ function TPerl_SetExpectedAbsorbs(self)
 				return
 			end
 		else
-		 --TODO: Figure this out.
-			--This is the area it would display absorbs incoming.
-			--Will likely require creating and updating a third bar just under the HP bar.
-			--This is because absorbs by definition imply additional health not taking away.
-			--The exception is the aborbing of healing to the target. I am taking this section to mean damage absorbs.
+			-- Retail/Midnight: show total damage absorbs (all sources).
+			-- Values may be "secret" in tainted code, so avoid boolean tests/comparisons on them.
+			local okAmt, amount = pcall(UnitGetTotalAbsorbs, unit)
+			if okAmt then
+				-- If the >0 comparison is blocked (secret number), default to showing and let SetValue decide.
+				local show = false
+				local okShow, resShow = pcall(function()
+					return amount > 0
+				end)
+				if okShow then
+					show = resShow
+				else
+					show = true
+				end
+				if show and not TPerl_SafeBool(UnitIsDeadOrGhost(unit)) then
+					local healthBar
+					if self.statsFrame and self.statsFrame.healthBar then
+						healthBar = self.statsFrame.healthBar
+					else
+						healthBar = self.healthBar
+					end
+					local isAFK = TPerl_SafeBool(UnitIsAFK(unit))
+					if (isAFK) then
+						bar:SetStatusBarColor(0.2, 0.2, 0.2, 0.7)
+					else
+						if not conf.colour.bar.absorb then
+							conf.colour.bar.absorb = { r = 0.14, g = 0.33, b = 0.7, a = 0.7 }
+						end
+						bar:SetStatusBarColor(conf.colour.bar.absorb.r, conf.colour.bar.absorb.g, conf.colour.bar.absorb.b, conf.colour.bar.absorb.a)
+					end
+					-- Draw absorbs as a light overlay on top of the HP bar (legacy TPerl/XPerl style).
+					if (healthBar) then
+						bar:ClearAllPoints()
+						bar:SetPoint("TOPLEFT", healthBar, "TOPLEFT", 0, 0)
+						bar:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 0, 0)
+						if bar.SetFrameLevel and healthBar.GetFrameLevel then
+							bar:SetFrameLevel(healthBar:GetFrameLevel() + 1)
+						end
+					end
+					pcall(function()
+						bar:SetReverseFill(true)
+					end)
+					local okMax, healthMax = pcall(UnitHealthMax, unit)
+					local okMM = false
+					if okMax then
+						okMM = pcall(bar.SetMinMaxValues, bar, 0, healthMax)
+					end
+					if not okMM then
+						pcall(bar.SetMinMaxValues, bar, 0, 1)
+					end
+					local okSet = pcall(bar.SetValue, bar, amount)
+					if okSet then
+						bar:Show()
+						return
+					end
+				end
+			end
 		end
-		
-		
 		bar:Hide()
 	end
 end
@@ -4528,24 +5810,45 @@ function TPerl_Unit_ThreatStatus(self, relative, immediate)
 			end
 		end
 
-		if (scaledPercent) then
-			if (scaledPercent ~= t.target) then
-				t.target = scaledPercent
-				if (immediate) then
-					t.current = scaledPercent
+			-- Midnight/Retail can return "secret" threat values which cannot be compared or used in arithmetic.
+			-- Prefer the detailed scaled percent when accessible, otherwise fall back to UnitThreatSituation.
+			local percent
+				if (scaledPercent and TPerl_CanAccess(scaledPercent)) then
+					percent = scaledPercent
+				elseif (one and two and UnitThreatSituation) then
+					local okTS, ts = pcall(UnitThreatSituation, one, two)
+					-- In Midnight/Retail, UnitThreatSituation can also return a secret number.
+					-- Never compare it unless we can access it.
+					if (okTS and type(ts) == "number" and TPerl_CanAccess(ts)) then
+						-- Approximate percent from threat state (0..3) to keep the UI functional.
+						if (ts == 1) then
+							percent = 30
+						elseif (ts == 2) then
+							percent = 70
+						elseif (ts >= 3) then
+							percent = 100
+						end
+					end
 				end
-				t.one = one
-				t.two = two
-				t:SetScript("OnUpdate", threatOnUpdate)
+
+			if (percent) then
+				if (percent ~= t.target) then
+					t.target = percent
+					if (immediate) then
+						t.current = percent
+					end
+					t.one = one
+					t.two = two
+					t:SetScript("OnUpdate", threatOnUpdate)
+				end
+
+				t.text:SetFormattedText("%d%%", percent)
+				local r, g, b = smoothColor(percent)
+				t.text:SetTextColor(r, g, b)
+
+				t:Show()
+				return
 			end
-
-			t.text:SetFormattedText("%d%%", scaledPercent)
-			local r, g, b = smoothColor(scaledPercent)
-			t.text:SetTextColor(r, g, b)
-
-			t:Show()
-			return
-		end
 
 		t:Hide()
 	end
@@ -4619,3 +5922,80 @@ function TPerl_Register_Prediction(self, conf, guidToUnit, ...)
 		end
 	end
 end
+------------------------------------------------------------------------------
+-- Debug helpers
+-- /tperl debugdebuffs
+function TPerl_DebugDumpDebuffs()
+	local units = { "player", "party1", "party2", "party3", "party4" }
+
+	DEFAULT_CHAT_FRAME:AddMessage("|c00FFFF80[TPerl] Debuff dump (HARMFUL) - showing name, dispelType, normalizedType, spellId, auraId, excluded|r")
+
+	for _, unit in ipairs(units) do
+		if UnitExists(unit) then
+			local uname = UnitName(unit)
+			if not TPerl_CanAccess(uname) then
+				uname = "<secret>"
+			end
+			DEFAULT_CHAT_FRAME:AddMessage(format("|c00FFFF80-- %s (%s) --|r", unit, uname or ""))
+			for i = 1, 40 do
+				local name, dispelName, spellId, auraId, nameUA, dispelUA, spellIdUA, nameCA, dispelCA, spellIdCA, auraIdCA, nameUD, dispelUD, spellIdUD = TPerl_GetHarmfulAura(unit, i)
+				if not name then
+					break
+				end
+
+
+				local nameSafe = (name and TPerl_CanAccess(name)) and name or "<secret>"
+				local dispelSafe = (dispelName and TPerl_CanAccess(dispelName)) and tostring(dispelName) or "<nil/secret>"
+				local dispelUA_safe = (dispelUA and TPerl_CanAccess(dispelUA)) and tostring(dispelUA) or "<nil/secret>"
+				local dispelCA_safe = (dispelCA and TPerl_CanAccess(dispelCA)) and tostring(dispelCA) or "<nil/secret>"
+				local dispelUD_safe = (dispelUD and TPerl_CanAccess(dispelUD)) and tostring(dispelUD) or "<nil/secret>"
+				local ttDt
+				-- Try tooltip scan regardless of spellId; cache lookups are best-effort
+				local safeSpellKey = TPerl_SafeSpellIdKey(spellId)
+				local safeAuraKey = TPerl_SafeAuraIdKey(auraId)
+				if (safeAuraKey) then
+					local cdt = TPerl_GetCachedDispelTypeByAuraId(safeAuraKey)
+					if (cdt) then
+						ttDt = cdt
+					end
+				end
+				if (not ttDt and safeSpellKey) then
+					local cdt = select(1, TPerl_GetCachedDispelType(safeSpellKey))
+					if (cdt) then
+						ttDt = cdt
+					end
+				end
+				if (not ttDt) then
+					local dtTT = select(1, TPerl_GetDispelTypeFromTooltip(unit, i))
+					ttDt = dtTT
+				end
+				local tt_safe = (ttDt and TPerl_CanAccess(ttDt)) and tostring(ttDt) or "<nil/secret>"
+				local src = "?"
+				local nUA = TPerl_NormalizeDispelType(dispelUA)
+				local nCA = TPerl_NormalizeDispelType(dispelCA)
+				if (nUA == "Magic" or nUA == "Curse" or nUA == "Disease" or nUA == "Poison" or nUA == "none") then
+					src = "UA"
+				elseif (nCA == "Magic" or nCA == "Curse" or nCA == "Disease" or nCA == "Poison" or nCA == "none") then
+					src = "CA"
+				elseif (ttDt == "Magic" or ttDt == "Curse" or ttDt == "Disease" or ttDt == "Poison" or ttDt == "none") then
+					src = "TT"
+				end
+				local norm = TPerl_NormalizeDispelType(dispelName) or "<nil>"
+				local excluded = false
+
+				if (name and TPerl_CanAccess(name)) then
+					local ex = ArcaneExclusions and ArcaneExclusions[name]
+					if (ex == true) then
+						excluded = true
+					elseif (type(ex) == "table") then
+						local _, class = UnitClass(unit)
+						excluded = (class and ex[class]) and true or false
+					end
+				end
+
+				DEFAULT_CHAT_FRAME:AddMessage(format("  %02d) %s | type=%s (UD=%s, UA=%s, CA=%s, TT=%s, src=%s) | norm=%s | spellId=%s | auraId=%s | excluded=%s", i, nameSafe, dispelSafe, dispelUD_safe, dispelUA_safe, dispelCA_safe, tt_safe, src, tostring(norm), ((spellId and TPerl_CanAccess(spellId)) and tostring(spellId) or "<nil/secret>"), ((auraId and TPerl_CanAccess(auraId)) and tostring(auraId) or "<nil/secret>"), excluded and "yes" or "no"))
+			end
+		end
+	end
+end
+

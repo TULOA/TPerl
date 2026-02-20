@@ -44,6 +44,63 @@ local UnregisterUnitWatch = UnregisterUnitWatch
 
 local UIParent = UIParent
 
+-- Midnight "secret value" helpers (safe across versions)
+local pcall = pcall
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+local function TPerl_TT_CanAccess(v)
+	-- In Midnight/Retail, values may be "secret" and cannot be compared/indexed in tainted addon code.
+	if (not IsRetail) then
+		return v ~= nil
+	end
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if (issecretvalue) then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or true
+	end
+	return v ~= nil
+end
+
+local function TPerl_TT_SafeBool(v)
+	if (not IsRetail) then
+		return (v and true or false)
+	end
+	if (not TPerl_TT_CanAccess(v)) then
+		return false
+	end
+	return (v and true or false)
+end
+
+local function TPerl_TT_GUIDEquals(a, b)
+	if (not IsRetail) then
+		return a == b
+	end
+	if (not TPerl_TT_CanAccess(a) or not TPerl_TT_CanAccess(b)) then
+		return false
+	end
+	local ok, res = pcall(function() return a == b end)
+	return ok and res or false
+end
+
+local function TPerl_TT_GUIDEqualsUnit(unit, guid)
+	return TPerl_TT_GUIDEquals(UnitGUID(unit), guid)
+end
+
+local function TPerl_TT_GuidChanged(newGuid, oldGuid)
+	if (not IsRetail) then
+		return newGuid ~= oldGuid
+	end
+	if (TPerl_TT_CanAccess(newGuid) and TPerl_TT_CanAccess(oldGuid)) then
+		local ok, res = pcall(function() return newGuid ~= oldGuid end)
+		return ok and res or true
+	end
+	return true
+end
+
 --local feignDeath = GetSpellInfo and GetSpellInfo(5384) or (C_Spell.GetSpellInfo(5384) and C_Spell.GetSpellInfo(5384).name)
 
 local conf
@@ -91,7 +148,7 @@ function TPerl_TargetTarget_OnLoad(self)
 			self:RegisterUnitEvent(event, "target")
 		end
 		TPerl_Register_Prediction(self, conf.targettarget, function(guid)
-			if guid == UnitGUID("targettarget") then
+				if TPerl_TT_GUIDEqualsUnit("targettarget", guid) then
 				return "targettarget"
 			end
 		end, "target")
@@ -106,7 +163,7 @@ function TPerl_TargetTarget_OnLoad(self)
 			self:RegisterUnitEvent(event, "focus")
 		end
 		TPerl_Register_Prediction(self, conf.targettarget, function(guid)
-			if guid == UnitGUID("focustarget") then
+				if TPerl_TT_GUIDEqualsUnit("focustarget", guid) then
 				return "focustarget"
 			end
 		end, "focus")
@@ -118,7 +175,7 @@ function TPerl_TargetTarget_OnLoad(self)
 			self:RegisterUnitEvent(event, "pet")
 		end
 		TPerl_Register_Prediction(self, conf.targettarget, function(guid)
-			if guid == UnitGUID("pettarget") then
+				if TPerl_TT_GUIDEqualsUnit("pettarget", guid) then
 				return "pettarget"
 			end
 		end, "pet")
@@ -130,7 +187,7 @@ function TPerl_TargetTarget_OnLoad(self)
 			self:RegisterUnitEvent(event, "target")
 		end
 		TPerl_Register_Prediction(self, conf.targettarget, function(guid)
-			if guid == UnitGUID("targettargettarget") then
+				if TPerl_TT_GUIDEqualsUnit("targettargettarget", guid) then
 				return "targettargettarget"
 			end
 		end, "targettarget")
@@ -197,8 +254,11 @@ end
 -- TPerl_TargetTarget_HighlightCallback
 function TPerl_TargetTarget_HighlightCallback(self, updateGUID)
 	local partyid = self.partyid
-	if UnitGUID(partyid) == updateGUID and UnitIsFriend("player", partyid) then
-		TPerl_Highlight:SetHighlight(self, updateGUID)
+	if (TPerl_TT_GUIDEqualsUnit(partyid, updateGUID) and UnitIsFriend("player", partyid)) then
+		-- Don't forward secret GUIDs into addon systems that may index/compare them.
+		if (not IsRetail or TPerl_TT_CanAccess(updateGUID)) then
+			TPerl_Highlight:SetHighlight(self, updateGUID)
+		end
 	end
 end
 
@@ -300,8 +360,10 @@ function TPerl_TargetTarget_UpdateDisplay(self, force)
 			--self.targetmanatype = UnitPowerType(partyid)
 			--self.targetmana = UnitPower(partyid)
 			--self.targetmanamax = UnitPowerMax(partyid)
-			--self.afk = UnitIsAFK(partyid) and conf.showAFK
-			self.guid = UnitGUID(partyid)
+				--self.afk = UnitIsAFK(partyid) and conf.showAFK
+				local g = UnitGUID(partyid)
+				-- Don't store secret GUIDs; later comparisons in tainted execution would throw.
+				self.guid = (not IsRetail or TPerl_TT_CanAccess(g)) and g or nil
 
 			TPerl_SetUnitNameColor(self.nameFrame.text, partyid)
 
@@ -399,11 +461,19 @@ function TPerl_TargetTarget_OnUpdate(self, elapsed)
 			TPerl_Target_UpdateHealth(self)
 		end
 	else
-	 if (conf.showAFK and newAFK ~= self.afk) then
+		local safeAFK = conf.showAFK and TPerl_TT_SafeBool(newAFK) or false
+		if (conf.showAFK and safeAFK ~= self.afk) then
+			self.afk = safeAFK
 			TPerl_Target_UpdateHealth(self)
 		end
-		self:RegisterUnitEvent("UNIT_HEALTH", "targettarget")
-  self:RegisterUnitEvent("UNIT_MAXHEALTH", "targettarget")
+		-- Register unit events once for the correct unit token (targettarget/focustarget/pettarget)
+		if (not self._retailUnitEvents) then
+			self:RegisterUnitEvent("UNIT_HEALTH", partyid)
+			self:RegisterUnitEvent("UNIT_MAXHEALTH", partyid)
+			self:RegisterUnitEvent("UNIT_POWER_UPDATE", partyid)
+			self:RegisterUnitEvent("UNIT_MAXPOWER", partyid)
+			self._retailUnitEvents = true
+		end
 	end
 
 	if (newManaType ~= self.targetmanatype) then
@@ -411,14 +481,10 @@ function TPerl_TargetTarget_OnUpdate(self, elapsed)
 		TPerl_Target_SetMana(self)
 	end
 
- if not IsRetail then
+	 if not IsRetail then
 		if (newMana ~= self.targetmana) or (newManaMax ~= self.targetmanamax) then
 			TPerl_Target_SetMana(self)
 		end
-	else
-	 
-		self:RegisterUnitEvent("UNIT_POWER_UPDATE", "targettarget")
-  self:RegisterUnitEvent("UNIT_MAXPOWER", "targettarget")
 	end
 
 	--[[if conf.showFD then
@@ -432,7 +498,7 @@ function TPerl_TargetTarget_OnUpdate(self, elapsed)
 		end
 	end--]]
 
-	if (newGuid ~= self.guid) then
+	if (TPerl_TT_GuidChanged(newGuid, self.guid)) then
 		TPerl_TargetTarget_UpdateDisplay(self)
 	else
 		self.time = elapsed + (self.time or 0)
@@ -463,7 +529,11 @@ function TPerl_TargetTargetTarget_OnUpdate(self, elapsed)
 	local newMana = UnitPower(partyid)
 	local newAFK = UnitIsAFK(partyid)
 
-	if (conf.showAFK and newAFK ~= self.afk) or (newHP ~= self.targethp) then
+	local safeAFK = conf.showAFK and (IsRetail and TPerl_TT_SafeBool(newAFK) or (newAFK and true or false)) or false
+	if (conf.showAFK and safeAFK ~= self.afk) or (newHP ~= self.targethp) then
+		if (conf.showAFK) then
+			self.afk = safeAFK
+		end
 		TPerl_Target_UpdateHealth(self)
 	end
 
@@ -487,7 +557,7 @@ function TPerl_TargetTargetTarget_OnUpdate(self, elapsed)
 		end
 	end--]]
 
-	if (newGuid ~= self.guid) then
+	if (TPerl_TT_GuidChanged(newGuid, self.guid)) then
 		TPerl_TargetTarget_UpdateDisplay(self)
 	else
 		self.time = elapsed + (self.time or 0)
@@ -567,8 +637,8 @@ function TPerl_TargetTarget_Update(self)
 				end
 				offset = offset + 20
 				local name
-				if not IsVanillaClassic and C_UnitAuras then
-					local auraData = C_UnitAuras.GetAuraDataByIndex("targettarget", 9, "HELPFUL")
+				if IsRetail and C_UnitAuras then
+					local auraData = TPerl_SafeGetAuraDataByIndex("targettarget", 9, "HELPFUL")
 					if auraData then
 						name = auraData.name
 						if name then

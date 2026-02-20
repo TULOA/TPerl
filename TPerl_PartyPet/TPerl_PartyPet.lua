@@ -19,6 +19,34 @@ end, "$Revision:  $")
 local AllPetFrames = {}
 
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
+local IsRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
+
+-- Midnight/Retail "secret value" helpers for party-pet frames.
+-- In Midnight, UnitHealth/UnitHealthMax can return secret values for group units.
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+local function TPerl_PartyPet_CanAccess(v)
+	if not IsRetail then
+		return v ~= nil
+	end
+	local okNil, isNil = pcall(function()
+		return v == nil
+	end)
+	if okNil and isNil then
+		return false
+	end
+	if canaccessvalue then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if issecretvalue then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or false
+	end
+	-- If we can safely compare to nil, it's not a secret value.
+	return okNil and (not isNil)
+end
 
 local UnitExists = UnitExists
 local UnitGUID = UnitGUID
@@ -309,8 +337,81 @@ local function TPerl_Party_Pet_UpdateHealth(self)
 		return
 	end
 
-	local health = UnitIsGhost(partyid) and 1 or (UnitIsDead(partyid) and 0 or UnitHealth(partyid))
-	local healthmax = UnitHealthMax(partyid)
+	local health, healthmax
+	if IsRetail and securecallfunction then
+		local isGhost = securecallfunction(UnitIsGhost, partyid)
+		local isDead = securecallfunction(UnitIsDead, partyid)
+		if isGhost then
+			health = 1
+		elseif isDead then
+			health = 0
+		else
+			health = securecallfunction(UnitHealth, partyid)
+		end
+		healthmax = securecallfunction(UnitHealthMax, partyid)
+	else
+		local isGhost = UnitIsGhost(partyid)
+		local isDead = UnitIsDead(partyid)
+		health = isGhost and 1 or (isDead and 0 or UnitHealth(partyid))
+		healthmax = UnitHealthMax(partyid)
+	end
+
+	-- When values are returned as 'secret' (tainted), try to still show the bar.
+	if IsRetail and (not TPerl_PartyPet_CanAccess(health) or not TPerl_PartyPet_CanAccess(healthmax) or (TPerl_PartyPet_CanAccess(healthmax) and healthmax == 0)) then
+		-- First try: if max health is accessible, we can still drive the StatusBar with the raw (possibly secret) health value.
+		if TPerl_PartyPet_CanAccess(healthmax) and type(healthmax) == 'number' and healthmax > 0 then
+			local okSet = pcall(function()
+				self.statsFrame.healthBar:SetMinMaxValues(0, healthmax)
+				self.statsFrame.healthBar:SetValue(health)
+			end)
+			if okSet then
+				-- Don't try to format/compare secret numbers; just show the bar and hide numeric text.
+				if self.statsFrame.healthBar.text then
+					self.statsFrame.healthBar.text:Hide()
+				end
+				if self.statsFrame.expectedAbsorbs then
+					self.statsFrame.expectedAbsorbs:Hide()
+				end
+				if self.statsFrame.expectedHealth then
+					self.statsFrame.expectedHealth:Hide()
+				end
+				TPerl_Party_Pet_UpdateResurrectionStatus(self)
+				return
+			end
+		end
+
+		-- Fallback: use percent when available so the bar isn't blank.
+		local pct
+		if UnitHealthPercent then
+			local ok, res = pcall(UnitHealthPercent, partyid)
+			if ok and TPerl_PartyPet_CanAccess(res) and type(res) == 'number' then
+				pct = res
+			end
+		end
+
+		if pct then
+			if pct < 0 then pct = 0 elseif pct > 100 then pct = 100 end
+			self.pethp = pct
+			self.pethpmax = 100
+			self.statsFrame.healthBar:SetMinMaxValues(0, 100)
+			self.statsFrame.healthBar:SetValue(pct)
+			TPerl_ColourHealthBar(self, pct / 100)
+			if (self.statsFrame.healthBar.text) then
+				self.statsFrame.healthBar.text:Show()
+				self.statsFrame.healthBar.text:SetText(string.format('%d%%', pct + 0.5))
+			end
+			TPerl_Party_Pet_UpdateResurrectionStatus(self)
+			return
+		end
+
+		self.statsFrame.healthBar:SetMinMaxValues(0, 1)
+		self.statsFrame.healthBar:SetValue(0)
+		if (self.statsFrame.healthBar.text) then
+			self.statsFrame.healthBar.text:Hide()
+		end
+		TPerl_Party_Pet_UpdateResurrectionStatus(self)
+		return
+	end
 
 	self.pethp = health
 	self.pethpmax = healthmax

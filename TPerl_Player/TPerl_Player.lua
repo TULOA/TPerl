@@ -17,6 +17,60 @@ end, "$Revision:  $")
 local perc1F = "%.1f"..PERCENT_SYMBOL
 local percD = "%.0f"..PERCENT_SYMBOL
 
+-- ---------------------------------------------------
+-- Special Power Bar visibility guard (Midnight-safe)
+-- Keeps 'Show special bar' (showRunes) OFF even if updates call :Show()
+-- ---------------------------------------------------
+function TPerl_Player_SpecialBar_IsEnabled()
+	if (not pconf) then return true end
+	local v = pconf.showRunes
+	return (v ~= nil and v ~= 0 and v ~= false)
+end
+
+function TPerl_Player_SpecialBar_Enforce(bar)
+	if (not bar) then return end
+	if (not TPerl_Player_SpecialBar_IsEnabled()) then
+		if (bar.Hide) then bar:Hide() end
+	end
+end
+
+function TPerl_Player_SpecialBar_OnSetShown(bar, shown)
+	if (shown) then
+		TPerl_Player_SpecialBar_Enforce(bar)
+	end
+end
+
+function TPerl_Player_SpecialBar_Hook(bar)
+	if (not bar or bar._tperl_spb_hooked) then return end
+	bar._tperl_spb_hooked = true
+	if (bar.HookScript) then
+		bar:HookScript("OnShow", TPerl_Player_SpecialBar_Enforce)
+	end
+	if (hooksecurefunc) then
+		hooksecurefunc(bar, "Show", TPerl_Player_SpecialBar_Enforce)
+		if (bar.SetShown) then
+			hooksecurefunc(bar, "SetShown", TPerl_Player_SpecialBar_OnSetShown)
+		end
+	end
+	TPerl_Player_SpecialBar_Enforce(bar)
+end
+
+function TPerl_Player_SpecialBar_ShowIfEnabled(bar)
+	if (not bar) then return end
+	TPerl_Player_SpecialBar_Hook(bar)
+	if (TPerl_Player_SpecialBar_IsEnabled()) then
+		if (bar.Show) then bar:Show() end
+	else
+		if (bar.Hide) then bar:Hide() end
+	end
+end
+
+function TPerl_Player_SpecialBar_EnforceAll()
+	TPerl_Player_SpecialBar_Enforce(TPerlSpecialPowerBarFrame)
+	TPerl_Player_SpecialBar_Enforce(TPerlSpecialPowerBarFrame2)
+end
+
+
 --[===[@debug@
 local function d(...)
 	ChatFrame1:AddMessage(format(...))
@@ -38,6 +92,37 @@ local hooksecurefunc = hooksecurefunc
 local max = max
 local pairs = pairs
 local pcall = pcall
+
+-- Midnight "secret value" helpers (safe across versions)
+local canaccessvalue = canaccessvalue
+local issecretvalue = issecretvalue
+
+local function TPerl_Player_CanAccess(v)
+	-- In Midnight/Retail, values may be "secret" and cannot be used in boolean tests / comparisons in tainted addon code.
+	if (not IsRetail) then
+		return v ~= nil
+	end
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	if (issecretvalue) then
+		local ok, res = pcall(issecretvalue, v)
+		return ok and (not res) or true
+	end
+	return v ~= nil
+end
+
+local function TPerl_Player_SafeBool(v)
+	if (not IsRetail) then
+		return (v and true or false)
+	end
+	if (not TPerl_Player_CanAccess(v)) then
+		return false
+	end
+	local ok, res = pcall(function() return (v and true or false) end)
+	return ok and res or false
+end
 local string = string
 
 local CreateFrame = CreateFrame
@@ -103,8 +188,29 @@ local TPerl_Player_InitWarlock
 local TPerl_PlayerStatus_OnUpdate
 local TPerl_Player_HighlightCallback
 
---local feignDeath = (C_Spell and C_Spell.GetSpellInfo(5384)) and C_Spell.GetSpellInfo(5384).name or GetSpellInfo(5384)
---local spiritOfRedemption = (C_Spell and C_Spell.GetSpellInfo(27827)) and C_Spell.GetSpellInfo(27827).name or GetSpellInfo(27827)
+-- Retail (Midnight) API: C_UnitAuras.GetAuraDataBySpellName requires a spell *name* (string).
+-- Some older code paths passed spellIDs or left these uninitialised, which can throw "bad argument #2".
+local function TPerl_Player_GetSpellNameSafe(spellID)
+	if not spellID then
+		return nil
+	end
+	-- Prefer C_Spell when available, fall back to GetSpellInfo.
+	if C_Spell and C_Spell.GetSpellInfo then
+		local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
+		if ok and info and info.name then
+			return info.name
+		end
+	end
+	local name = GetSpellInfo(spellID)
+	if type(name) == "string" and name ~= "" then
+		return name
+	end
+	return nil
+end
+
+local feignDeath = TPerl_Player_GetSpellNameSafe(5384)
+-- Spirit of Redemption has had multiple spellIDs across eras; either returns the same name.
+local spiritOfRedemption = TPerl_Player_GetSpellNameSafe(27827) or TPerl_Player_GetSpellNameSafe(20711)
 
 
 ----------------------
@@ -692,7 +798,7 @@ function TPerl_Player_DruidBarUpdate(self)
 	
 
 	--local druidBarExtra
-	if ((playerClass == "DRUID" or playerClass == "PRIEST") and UnitPowerType(self.partyid) > 0) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0) then -- Shaman's UnitPowerType is buggy
+	if ((playerClass == "DRUID" or playerClass == "PRIEST") and (UnitPowerType(self.partyid) or 0) > 0) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0) then -- Shaman's UnitPowerType is buggy
 		if (pconf.values) then
 			druidBar.text:Show()
 		else
@@ -875,15 +981,14 @@ local function TPerl_Player_UpdateHealth(self)
 	 local playerInverseHp = 0 -- Not used in anything but retail.
 	end
 
-	self.afk = UnitIsAFK(partyid) and conf.showAFK == 1
+	local isAFK = TPerl_Player_SafeBool(UnitIsAFK("player"))
+	self.afk = isAFK
 	
 	
  --print(partyid, playerhealth, playerhealthmax, playerInverseHp)
 	TPerl_SetHealthBar(self, playerhealth, playerhealthmax, playerInverseHp)
+	TPerl_Player_UpdateAbsorbPrediction(self)
 	if not IsRetail then
-		--Not implemented in retail yet.
-		--FLAG: IMPLEMENTME
-		TPerl_Player_UpdateAbsorbPrediction(self)
 		TPerl_Player_UpdateHotsPrediction(self)
 		TPerl_Player_UpdateHealPrediction(self)
 		TPerl_Player_UpdateResurrectionStatus(self)
@@ -895,23 +1000,31 @@ local function TPerl_Player_UpdateHealth(self)
 			greyMsg = TPERL_LOC_DEAD
 		elseif (UnitIsGhost(partyid)) then
 			greyMsg = TPERL_LOC_GHOST
-		elseif (UnitIsAFK("player") and conf.showAFK) then
+		elseif (conf.showAFK and isAFK) then
 			greyMsg = CHAT_MSG_AFK
 		--elseif (conf.showFD and UnitBuff(partyid, feignDeath)) then
 			--greyMsg = TPERL_LOC_FEIGNDEATHSHORT
 		--elseif (UnitBuff(partyid, spiritOfRedemption)) then
 			--greyMsg = TPERL_LOC_DEAD
 		end
- else
-	 if (UnitIsDead(partyid)) then
+	else
+		-- Ensure these are initialised as spell *names* (string) before calling GetAuraDataBySpellName.
+		if conf.showFD and not feignDeath then
+			feignDeath = TPerl_Player_GetSpellNameSafe(5384)
+		end
+		if not spiritOfRedemption then
+			spiritOfRedemption = TPerl_Player_GetSpellNameSafe(27827) or TPerl_Player_GetSpellNameSafe(20711)
+		end
+
+		 if (UnitIsDead(partyid)) then
 			greyMsg = TPERL_LOC_DEAD
 		elseif (UnitIsGhost(partyid)) then
 			greyMsg = TPERL_LOC_GHOST
-		elseif (UnitIsAFK("player") and conf.showAFK) then
+		elseif (conf.showAFK and isAFK) then
 			greyMsg = CHAT_MSG_AFK
-		elseif (conf.showFD and C_UnitAuras.GetAuraDataBySpellName(partyid, feignDeath)) then
+		elseif (conf.showFD and feignDeath and C_UnitAuras.GetAuraDataBySpellName(partyid, feignDeath)) then
 			greyMsg = TPERL_LOC_FEIGNDEATHSHORT
-		elseif (C_UnitAuras.GetAuraDataBySpellName(partyid, 20711)) then
+		elseif (spiritOfRedemption and C_UnitAuras.GetAuraDataBySpellName(partyid, spiritOfRedemption)) then
 			greyMsg = TPERL_LOC_DEAD
 		end
 	end
@@ -995,7 +1108,7 @@ function TPerl_Player_OnUpdate(self, elapsed)
 	end
 
 	local partyid = self.partyid
-	local newAFK = UnitIsAFK(partyid)
+	local newAFK = TPerl_Player_SafeBool(UnitIsAFK("player"))
 
 	if (conf.showAFK and newAFK ~= self.afk) then
 		TPerl_Player_UpdateHealth(self)
@@ -2226,7 +2339,7 @@ function TPerl_Player_Set_Bits(self)
 
 		if (pconf.extendPortrait --[[or (self.runes and pconf.showRunes and pconf.dockRunes)]]) then
 			local druidBarExtra
-			if (UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) and ((playerClass == "DRUID") or (playerClass == "PRIEST") or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0)) then
+			if ((UnitPowerType(self.partyid) or 0) > 0 and not pconf.noDruidBar) and ((playerClass == "DRUID") or (playerClass == "PRIEST") or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0)) then
 				druidBarExtra = 1
 			else
 				druidBarExtra = 0
@@ -2581,7 +2694,7 @@ function TPerl_Player_InitPaladin(self, playerClass)
                     TPerl_BuildPaladinHolyPowerBar_Mists(TPerlSpecialPowerBarFrame)
                     TPerlSpecialPowerBarFrame.Created = true
                 end
-                TPerlSpecialPowerBarFrame:Show()
+                TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
             -- else
                 -- if TPerlSpecialPowerBarFrame then
                     -- TPerlSpecialPowerBarFrame:Hide()
@@ -2599,7 +2712,7 @@ function TPerl_Player_InitPaladin(self, playerClass)
 																TPerl_BuildPaladinHolyPowerBar_Retail(TPerlSpecialPowerBarFrame)
 																TPerlSpecialPowerBarFrame.Created = true
 												end
-                TPerlSpecialPowerBarFrame:Show()
+                TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
             --else
                 -- if TPerlSpecialPowerBarFrame then
                     -- TPerlSpecialPowerBarFrame:Hide()
@@ -2644,7 +2757,7 @@ function TPerl_Player_InitPriest(self, playerClass)
         local function UpdateShadowOrbVisibility()
             local spec = TPerl_GetPriestSpec()
             if spec == 3 then -- Shadow in Classic
-                TPerlSpecialPowerBarFrame:Show()
+                TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
             else
                 -- tear down
                 TPerlSpecialPowerBarFrame:Hide()
@@ -2802,7 +2915,7 @@ function TPerl_Player_InitMage(self, playerClass)
 
         if isArcane then
             EnsureArcaneBar()
-            TPerlSpecialPowerBarFrame:Show()
+            TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
             -- re-enable events if bar supports them
             if TPerlSpecialPowerBarFrame.UpdateCharges then
                 TPerlSpecialPowerBarFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -2862,7 +2975,7 @@ function TPerl_Player_InitEvoker(self, playerClass)
         TPerlSpecialPowerBarFrame:SetMovable(true)
         TPerlSpecialPowerBarFrame:SetClampedToScreen(true)
         TPerlSpecialPowerBarFrame:SetSize(150, 30)
-        TPerlSpecialPowerBarFrame:Show()
+        TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
 
         TPerl_BuildEvokerEssenceBar_Retail(TPerlSpecialPowerBarFrame)
     end
@@ -2880,7 +2993,7 @@ function TPerl_Player_InitEvoker(self, playerClass)
             local specID = specIndex and GetSpecializationInfo(specIndex)
             -- All specs use Essence, so show always
             if playerClass == "EVOKER" then
-                TPerlSpecialPowerBarFrame:Show()
+                TPerl_Player_SpecialBar_ShowIfEnabled(TPerlSpecialPowerBarFrame)
             else
                 TPerlSpecialPowerBarFrame:Hide()
             end

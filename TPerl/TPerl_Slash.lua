@@ -14,10 +14,21 @@ local function TPerl_SlashHandler(msg)
 		TPerl_Toggle()
 		return
 	end
-	print(args[1])
+	-- print(args[1]) -- debug removed
 	if (args[1] == "zimport") then
 	 --Manually import ZPerl Settings.
 		TPerl_Import()
+	end
+
+
+	-- Debug: dump harmful auras/dispel types for player + party
+	if (args[1] == "debugdebuffs") then
+		if (TPerl_DebugDumpDebuffs) then
+			TPerl_DebugDumpDebuffs()
+		else
+			DEFAULT_CHAT_FRAME:AddMessage("|c00FFFF80[TPerl] Debug function not loaded yet.|r")
+		end
+		return
 	end
 	if (args[1] == nil or args[1] == TPERL_CMD_MENU or args[1] == TPERL_CMD_OPTIONS) then
 		TPerl_Toggle()
@@ -84,3 +95,6 @@ end
 SlashCmdList["TPerl"] = TPerl_SlashHandler
 SLASH_TPerl1 = "/tperl"
 SLASH_TPerl2 = "/tp"
+
+-- Alias for legacy command name
+SLASH_TPerl3 = "/xperl"
