@@ -83,10 +83,34 @@ function TPerl_Player_Buffs_Position(self)
 
 			local _, playerClass = UnitClass("player")
 			-- Be EXTRA positive
-			playerClass = strupper(playerClass)
+			playerClass = playerClass and strupper(playerClass) or ""
 			local extraBar
 
-			if (playerClass == "DRUID" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "SHAMAN" and not IsClassic and GetSpecialization() == 1 and GetShapeshiftForm() == 0 and not pconf.noDruidBar) or (playerClass == "PRIEST" and UnitPowerType(self.partyid) > 0 and not pconf.noDruidBar) or (playerClass == "DEATHKNIGHT") then
+			-- In Midnight, some APIs may return nil/forbidden values at odd times (eg. during option updates).
+			-- Make UnitPowerType/spec/form checks nil-safe to avoid compare-with-nil errors.
+			local powerType = 0
+			do
+				local ok, pt = pcall(UnitPowerType, self.partyid)
+				if ok and type(pt) == "number" then
+					powerType = pt
+				end
+			end
+			local spec = 0
+			do
+				local ok, s = pcall(GetSpecialization)
+				if ok and type(s) == "number" then
+					spec = s
+				end
+			end
+			local form = 0
+			do
+				local ok, f = pcall(GetShapeshiftForm)
+				if ok and type(f) == "number" then
+					form = f
+				end
+			end
+
+			if (playerClass == "DRUID" and powerType > 0 and not pconf.noDruidBar) or (playerClass == "SHAMAN" and not IsClassic and spec == 1 and form == 0 and not pconf.noDruidBar) or (playerClass == "PRIEST" and powerType > 0 and not pconf.noDruidBar) or (playerClass == "DEATHKNIGHT") then
 				extraBar = 1
 			else
 				extraBar = 0
@@ -327,6 +351,12 @@ function TPerl_PlayerBuffs_OnEvent(self, event, ...)
 		if (unit == "player" or unit == "pet" or unit == "vehicle") then
 			TPerl_PlayerBuffs_Update(self)
 		end
+	elseif (event == "PLAYER_REGEN_ENABLED") then
+		-- Ensure cancel-aura secure attributes are set after combat lockdown ends.
+		pcall(self.RegisterForClicks, self, "RightButtonDown", "RightButtonUp")
+		pcall(self.SetAttribute, self, "type2", "cancelaura")
+		pcall(self.SetAttribute, self, "useparent-unit", true)
+		self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 	--[[elseif (event == "PLAYER_EQUIPMENT_CHANGED") then
 		local slot, hasItem = ...
 		if (slot == 16 or slot == 17) then
@@ -336,6 +366,14 @@ function TPerl_PlayerBuffs_OnEvent(self, event, ...)
 end
 
 function TPerl_PlayerBuffs_OnAttrChanged(self, attr, value)
+	if (attr == "index") then
+		-- SecureAuraHeader may provide the aura index via an attribute; mirror it to the button ID
+		-- so secure cancel-aura logic that relies on GetID() continues to work.
+		local n = tonumber(value)
+		if n and n > 0 then
+			pcall(self.SetID, self, n)
+		end
+	end
 	if (attr == "index" or attr == "filter" or attr == "target-slot") then
 		TPerl_PlayerBuffs_Update(self)
 	end
@@ -385,7 +423,7 @@ function TPerl_PlayerBuffs_Update(self)
 		if filter and unit then
 			local name, icon, applications, dispelName, duration, expirationTime, sourceUnit
 			if not IsVanillaClassic and C_UnitAuras then
-				local auraData = C_UnitAuras.GetAuraDataByIndex(unit, index, filter)
+				local auraData = TPerl_SafeGetAuraDataByIndex(unit, index, filter)
 				if auraData then
 					name = auraData.name
 					icon = auraData.icon
@@ -452,15 +490,14 @@ end
 
 function TPerl_PlayerBuffs_OnLoad(self)
 	TPerl_SetChildMembers(self)
-	-- if IsRetail then
-	 -- if not InCombatLockdown() then
- 		-- self:RegisterForClicks("RightButtonDown", "RightButtonUp")
-		-- end
-	-- else
-	 -- if not InCombatLockdown() then
-		 -- self:RegisterForClicks("RightButtonUp")
-		-- end
-	-- end
+	-- Ensure right-click cancel works reliably on SecureAuraHeader children.
+	-- Some clients require RightButtonDown registration and the button must resolve the unit via parent.
+	local ok1 = pcall(self.RegisterForClicks, self, "RightButtonDown", "RightButtonUp")
+	local ok2 = pcall(self.SetAttribute, self, "type2", "cancelaura")
+	local ok3 = pcall(self.SetAttribute, self, "useparent-unit", true)
+	if (not ok1 or not ok2 or not ok3) then
+		self:RegisterEvent("PLAYER_REGEN_ENABLED")
+	end
 end
 
 

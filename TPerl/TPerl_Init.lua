@@ -245,10 +245,60 @@ local lastNamesList
 local lastName
 local lastWith
 local lastNamesCount
-local function GetNamesWithoutBuff(spellName, with, filter)
-	if spellName == lastName and with == lastWith and lastNamesList then
-		return lastNamesList, lastNamesCount
+	local function TPerl_Init_CanAccess(v)
+		-- Midnight/Retail: protect against secret values.
+		if (not IsRetail) then
+			return true
+		end
+		local t = type(v)
+		if (t ~= "string" and t ~= "number" and t ~= "boolean") then
+			return true
+		end
+		if (type(issecretvalue) == "function") then
+			local ok, isSecret = pcall(issecretvalue, v)
+			if ok and isSecret then
+				return false
+			end
+		end
+		if (type(canaccessvalue) == "function") then
+			local ok, canAccess = pcall(canaccessvalue, v)
+			return ok and canAccess or false
+		end
+		return true
 	end
+
+	local function TPerl_Init_SafeStringEquals(a, b)
+		if (not IsRetail) then
+			return a == b
+		end
+		if (type(a) ~= "string" or type(b) ~= "string") then
+			return false
+		end
+		if (not TPerl_Init_CanAccess(a) or not TPerl_Init_CanAccess(b)) then
+			return false
+		end
+		local ok, res = pcall(function()
+			return a == b
+		end)
+		return ok and res or false
+	end
+
+	local function TPerl_Init_SafeCacheName(name)
+		-- Don't cache secret/tainted names in Retail; it will break later comparisons.
+		if (not IsRetail) then
+			return name
+		end
+		if (type(name) ~= "string") then
+			return nil
+		end
+		return TPerl_Init_CanAccess(name) and name or nil
+	end
+	local function GetNamesWithoutBuff(spellName, with, filter)
+		if lastNamesList and (with == lastWith) then
+			if (not IsRetail and spellName == lastName) or (IsRetail and TPerl_Init_SafeStringEquals(spellName, lastName)) then
+				return lastNamesList, lastNamesCount
+			end
+		end
 
 	local count = 0
 	local names
@@ -302,8 +352,8 @@ local function GetNamesWithoutBuff(spellName, with, filter)
 			local hasBuff
 			for i = 1, 40 do
 				local name, icon, applications, duration, expirationTime, sourceUnit, isStealable
-				if not IsVanillaClassic and C_UnitAuras then
-					local auraData = C_UnitAuras.GetAuraDataByIndex(unitid, i, filter)
+				if IsRetail and C_UnitAuras then
+					local auraData = TPerl_SafeGetAuraDataByIndex(unitid, i, filter)
 					if auraData then
 						name = auraData.name
 						icon = auraData.icon
@@ -321,7 +371,7 @@ local function GetNamesWithoutBuff(spellName, with, filter)
 					break
 				end
 
-				if name == spellName then
+				if (not IsRetail and name == spellName) or (IsRetail and TPerl_Init_SafeStringEquals(name, spellName)) then
 					hasBuff = true
 				--[[else
 					for dups, pair in pairs(matches) do
@@ -419,7 +469,7 @@ local function GetNamesWithoutBuff(spellName, with, filter)
 	--TPerl_FreeTable(withList)
 
 	lastNamesList = names
-	lastName = spellName
+		lastName = TPerl_Init_SafeCacheName(spellName)
 	lastWith = with
 	lastNamesCount = count
 
@@ -441,8 +491,8 @@ end
 local function TPerl_ToolTip_AddBuffDuration(self, partyid, buffID, filter)
 	if IsInRaid() or UnitInParty("player") then
 		local name, applications, duration, expirationTime, sourceUnit, isStealable
-		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(partyid, buffID, filter)
+		if IsRetail and C_UnitAuras then
+			local auraData = TPerl_SafeGetAuraDataByIndex(partyid, buffID, filter)
 			if auraData then
 				name = auraData.name
 				icon = auraData.icon
@@ -457,24 +507,25 @@ local function TPerl_ToolTip_AddBuffDuration(self, partyid, buffID, filter)
 			name, _, applications, _, duration, expirationTime, sourceUnit, isStealable = UnitAura(partyid, buffID, filter)
 		end
 
-		if conf.buffHelper.enable and partyid and (UnitInParty(partyid) or UnitInRaid(partyid)) then
-			if name then
-				local names, count = GetNamesWithoutBuff(name, IsAltKeyDown(), filter)
-				if names then
-					if IsAltKeyDown() then
-						self:AddLine(format(TPERL_RAID_TOOLTIP_WITHBUFF, count), 0.3, 1, 0.2)
-					else
-						self:AddLine(format(TPERL_RAID_TOOLTIP_WITHOUTBUFF, count), 1, 0.3, 0.1)
-					end
+			if conf.buffHelper.enable and partyid and (UnitInParty(partyid) or UnitInRaid(partyid)) then
+				-- Midnight/Retail: avoid boolean tests and comparisons on secret aura names.
+				if (type(name) == "string") and ((not IsRetail) or TPerl_Init_CanAccess(name)) then
+					local names, count = GetNamesWithoutBuff(name, IsAltKeyDown(), filter)
+					if names then
+						if IsAltKeyDown() then
+							self:AddLine(format(TPERL_RAID_TOOLTIP_WITHBUFF, count), 0.3, 1, 0.2)
+						else
+							self:AddLine(format(TPERL_RAID_TOOLTIP_WITHOUTBUFF, count), 1, 0.3, 0.1)
+						end
 
-					if conf.buffHelper.sort then
-						self:AddLine(names, 0.5, 0.5, 0.5)
-					else
-						self:AddLine(names, 0.5, 0.5, 0.5, 1)
+						if conf.buffHelper.sort then
+							self:AddLine(names, 0.5, 0.5, 0.5)
+						else
+							self:AddLine(names, 0.5, 0.5, 0.5, 1)
+						end
 					end
 				end
 			end
-		end
 
 		if sourceUnit and conf.buffs.names then
 			local casterName = UnitFullName(sourceUnit)

@@ -15,6 +15,19 @@ local IsTBCAnni = WOW_PROJECT_ID == WOW_PROJECT_BURNING_CRUSADE_CLASSIC
 local IsClassic = WOW_PROJECT_ID >= WOW_PROJECT_CLASSIC
 local IsVanillaClassic = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
+-- Midnight secret-value helper (Retail/Midnight)
+local canaccessvalue = canaccessvalue
+local function xpHigh_CanAccess(v)
+	if (not IsRetail) then
+		return true
+	end
+	if (canaccessvalue) then
+		local ok, res = pcall(canaccessvalue, v)
+		return ok and res or false
+	end
+	return false
+end
+
 local _G = _G
 
 local bit = bit
@@ -233,6 +246,10 @@ end
 
 -- TPerl_Highlight:Add
 function xpHigh:Add(guid, highlightType, duration, source)
+	-- Avoid indexing tables with secret GUIDs in Midnight/Retail
+	if (IsRetail and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	if (not guid) then
 		return
 	end
@@ -283,6 +300,12 @@ end
 
 -- xpHigh:TooltipInfo
 function xpHigh:TooltipInfo(guid)
+	if (not guid) then
+		return
+	end
+	if (IsRetail and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	local effects = self.list[guid]
 	if (effects) then
 		local str = ""
@@ -305,6 +328,9 @@ end
 
 -- xpHigh:Remove
 function xpHigh:Remove(guid, highlightType)
+	if (IsRetail and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	if (not guid) then
 		return
 	end
@@ -321,6 +347,9 @@ end
 
 -- xpHigh:HasEffect
 function xpHigh:HasEffect(guid, effect)
+	if (IsRetail and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	if (not guid) then
 		return
 	end
@@ -407,6 +436,10 @@ function xpHigh:SetHighlight(frame, guid)
 		end
 	end
 
+	-- In Midnight/Retail, UnitGUID("target") etc may be secret; skip highlight lookup
+	if (IsRetail and guid and not xpHigh_CanAccess(guid)) then
+		guid = nil
+	end
 	self:OnUpdate(0)
 
 	local hotCount, pomActive, hotBar, hotSparks, showShield
@@ -693,7 +726,7 @@ function xpHigh:GetMyHotTime(unit)
 	for i = 1, 40 do
 		local name, duration, expirationTime
 		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
 			if auraData then
 				name = auraData.name
 				duration = auraData.duration
@@ -782,7 +815,7 @@ function xpHigh:HasMyHOT(unit)
 	for i = 1, 40 do
 		local name
 		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
 			if auraData then
 				name = auraData.name
 			end
@@ -830,7 +863,7 @@ function xpHigh:GetMyPomEndTime(unit)
 	for i = 1, 40 do
 		local name, expirationTime
 		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
 			if auraData then
 				name = auraData.name
 				expirationTime = auraData.expirationTime
@@ -1536,7 +1569,7 @@ function xpHigh.clEvents:SPELL_PERIODIC_HEAL(timestamp, event, srcGUID, srcName,
 					for i = 1, 39 do
 						local ID
 						if not IsVanillaClassic and C_UnitAuras then
-							local auraData = C_UnitAuras.GetAuraDataByIndex(checkName, i, "HELPFUL|PLAYER")
+							local auraData = TPerl_SafeGetAuraDataByIndex(checkName, i, "HELPFUL|PLAYER")
 							if auraData then
 								ID = auraData.spellId
 							end
@@ -1552,7 +1585,7 @@ function xpHigh.clEvents:SPELL_PERIODIC_HEAL(timestamp, event, srcGUID, srcName,
 
 					local expirationTime, sourceUnit
 					if not IsVanillaClassic and C_UnitAuras then
-						local auraData = C_UnitAuras.GetAuraDataByIndex(checkName, index, "HELPFUL|PLAYER")
+						local auraData = TPerl_SafeGetAuraDataByIndex(checkName, index, "HELPFUL|PLAYER")
 						if auraData then
 							expirationTime = auraData.expirationTime
 							sourceUnit = auraData.sourceUnit
@@ -1758,7 +1791,7 @@ function xpHigh:HasMyPomPom(unit)
 	for i = 1, 40 do
 		local name, expirationTime
 		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
 			if auraData then
 				name = auraData.name
 				expirationTime = auraData.expirationTime
@@ -1781,7 +1814,7 @@ function xpHigh:HasMyShield(unit)
 	for i = 1, 40 do
 		local name, expirationTime
 		if not IsVanillaClassic and C_UnitAuras then
-			local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
+			local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL|PLAYER")
 			if auraData then
 				name = auraData.name
 				expirationTime = auraData.expirationTime
@@ -1820,6 +1853,9 @@ end
 -- RemoveAllFromGUID
 function xpHigh:RemoveAllFromGUID(unit)
 	local guid = UnitGUID(unit)
+	if (IsRetail and guid and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	if guid and self.list[guid] then
 		self.list[guid] = nil
 		self:Send(guid)
@@ -1833,6 +1869,9 @@ function xpHigh:UNIT_AURA(unit)
 	end
 
 	local guid = UnitGUID(unit)
+	if (IsRetail and guid and not xpHigh_CanAccess(guid)) then
+		return
+	end
 	if UnitIsDeadOrGhost(unit) then
 		self:RemoveAllFromGUID(guid)
 		return
@@ -1875,7 +1914,7 @@ function xpHigh:UNIT_AURA(unit)
 		for i = 1, 40 do
 			local name
 			if not IsVanillaClassic and C_UnitAuras then
-				local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+				local auraData = TPerl_SafeGetAuraDataByIndex(unit, i, "HELPFUL")
 				if auraData then
 					name = auraData.name
 				end

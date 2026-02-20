@@ -23,6 +23,21 @@ local IsMistsClassic = WOW_PROJECT_ID == WOW_PROJECT_MISTS_CLASSIC
 
 local GetNumGroupMembers = GetNumGroupMembers
 
+-- Midnight/Retail secret number safety helpers
+local pcall = pcall
+local function _tperl_gt(a, b) return a > b end
+local function _tperl_eq(a, b) return a == b end
+local function _tperl_sub(a, b) return a - b end
+local function _tperl_mul(a, b) return a * b end
+local function _tperl_div(a, b) return a / b end
+
+local function TPerl_RaidHelper_SafeGT(a, b) local ok, r = pcall(_tperl_gt, a, b); if ok then return r end end
+local function TPerl_RaidHelper_SafeEQ(a, b) local ok, r = pcall(_tperl_eq, a, b); if ok then return r end end
+local function TPerl_RaidHelper_SafeSub(a, b) local ok, r = pcall(_tperl_sub, a, b); if ok then return r end end
+local function TPerl_RaidHelper_SafeMul(a, b) local ok, r = pcall(_tperl_mul, a, b); if ok then return r end end
+local function TPerl_RaidHelper_SafeDiv(a, b) local ok, r = pcall(_tperl_div, a, b); if ok then return r end end
+
+
 if type(RegisterAddonMessagePrefix) == "function" then
 	RegisterAddonMessagePrefix("CTRA")
 end
@@ -127,19 +142,26 @@ local function UpdateUnit(self,forcedUpdate)
 		-- Health
 		local healthMax = UnitHealthMax(xunit)
 		local health = UnitIsGhost(xunit) and 1 or (UnitIsDead(xunit) and 0 or UnitHealth(xunit))
-		-- Begin 4.3 division by 0 work around to ensure we don't divide if max is 0
-		if UnitIsDeadOrGhost(xunit) or (health == 0 and healthMax == 0) then--Probably dead target
-			percBar = 0 -- So just automatically set percent to 0 and avoid division of 0/0 all together in this situation.
-		elseif health > 0 and healthMax == 0 then -- We have current ho but max hp failed.
-			healthMax = health -- Make max hp at least equal to current health
-			percBar = 1 -- And percent 100% cause a number divided by itself is 1, duh.
+		-- Begin 4.3 division by 0 work around (also protect against secret numbers)
+		if UnitIsDeadOrGhost(xunit) then
+			percBar = 0
 		else
-			percBar = health / healthMax--Everything is dandy, so just do it right way.
+			local max0 = TPerl_RaidHelper_SafeEQ(healthMax, 0)
+			local cur0 = TPerl_RaidHelper_SafeEQ(health, 0)
+			local gt0 = TPerl_RaidHelper_SafeGT(health, 0)
+			if (max0 and cur0) then
+				percBar = 0
+			elseif (max0 and gt0) then
+				healthMax = health
+				percBar = 1
+			else
+				percBar = TPerl_RaidHelper_SafeDiv(health, healthMax)
+			end
 		end
 		-- end division by 0 check
-		local perc = percBar * 100
+		local perc = percBar and TPerl_RaidHelper_SafeMul(percBar, 100)
 
-		if (healthMax == 0) then
+		if (TPerl_RaidHelper_SafeEQ(healthMax, 0)) then
 			grey, health, healthMax, perc = 1, 0, 1, 0
 		end
 
@@ -154,13 +176,22 @@ local function UpdateUnit(self,forcedUpdate)
 			grey = true
 		else
 			if (conf.HealerMode == 1 and UnitInRaid(xunit)) then
-				if (conf.HealerModeType == 1) then
-					self.healthBar.text:SetText(health - healthMax.."/"..healthMax)
+				local delta = TPerl_RaidHelper_SafeSub(health, healthMax)
+				if delta ~= nil then
+					if (conf.HealerModeType == 1) then
+						self.healthBar.text:SetText(delta.."/"..healthMax)
+					else
+						self.healthBar.text:SetText(delta)
+					end
 				else
-					self.healthBar.text:SetText(health - healthMax)
+					self.healthBar.text:SetText("")
 				end
 			else
-				self.healthBar.text:SetText(floor(perc + 0.5).."%")
+				if (perc ~= nil) then
+					self.healthBar.text:SetText(floor(perc + 0.5).."%")
+				else
+					self.healthBar.text:SetText("")
+				end
 			end
 		end
 		if (conf.UnitHeight < 23) then
