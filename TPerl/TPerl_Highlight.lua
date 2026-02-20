@@ -430,7 +430,17 @@ function xpHigh:SetHighlight(frame, guid)
 	if (not guid) then
 		unitid = SecureButton_GetUnit(frame)
 		if (unitid) then
-			guid = UnitGUID(unitid)
+			-- Midnight/Retail: unit tokens can occasionally be secret/invalid (e.g. dynamically created frames like
+			-- targettargettarget). Calling UnitGUID on those can throw a hard error, so guard it.
+			if (IsRetail and not xpHigh_CanAccess(unitid)) then
+				return
+			end
+			local ok, res = pcall(UnitGUID, unitid)
+			if (ok) then
+				guid = res
+			else
+				return
+			end
 		else
 			return
 		end

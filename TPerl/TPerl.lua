@@ -5095,7 +5095,11 @@ end
 --This function sucks, it needs reworking so it self corrects /0 problems here. But i haven't quite figured out how to approach it here yet. So i just fix stuff at sethealth functions.
 function TPerl_Unit_GetHealth(self)
 	local partyid = self.partyid
-	local hp, hpMax = UnitHealth(partyid), UnitHealthMax(partyid)
+	local hp, hpMax
+	local ok, res = pcall(UnitHealth, partyid)
+	hp = ok and res or 0
+	ok, res = pcall(UnitHealthMax, partyid)
+	hpMax = ok and res or 1
  if not IsRetail then
 		if (hp > hpMax) then
 			if (UnitIsGhost(partyid)) then
@@ -5998,4 +6002,3 @@ function TPerl_DebugDumpDebuffs()
 		end
 	end
 end
-
