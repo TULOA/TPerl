@@ -19,6 +19,18 @@ C:\Projects\WoW\Bin\Interface\FrameXML\UI.xsd">
 						</Anchor>
 					</Anchors>
 				</Texture>
+				<Texture name="$parentshield" file="Interface\GroupFrame\UI-Group-MainTankIcon">
+					<Size>
+						<AbsDimension x="16" y="16"/>
+					</Size>
+					<Anchors>
+						<Anchor point="LEFT">
+							<Offset>
+								<AbsDimension x="0" y="0"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</Texture>
 				<FontString name="$parentcastTimeText" inherits="GameFontHighlight" hidden="true">
 					<Anchors>
 						<Anchor point="LEFT" relativePoint="RIGHT">
