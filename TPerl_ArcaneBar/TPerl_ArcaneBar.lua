@@ -470,6 +470,12 @@ function TPerl_ArcaneBar_OnEvent(self, event, unit, ...)
 		self.castID = castID
 		self.barParentName:Hide()
 		self.barSpark:Show()
+
+		if(type(notInterruptible) == "boolean") then
+			-- Allowed to be called using the secret value
+			self.shield:SetAlphaFromBoolean(notInterruptible)
+		end
+
 		if (not startTime or not endTime) then
 			-- Midnight/Retail: some channel casts may not provide usable timing info (or values may be blocked/secret).
 			-- Try to estimate a duration from spellID so we can still show a progressing bar (one direction).
@@ -583,6 +589,12 @@ function TPerl_ArcaneBar_OnEvent(self, event, unit, ...)
 				self:Hide()
 				return
 			end
+
+			if(type(notInterruptible) == "boolean") then
+				-- Allowed to be called using the secret value
+				self.shield:SetAlphaFromBoolean(notInterruptible)
+			end
+
 			local sid = spellID
 			if (not sid or (canaccessvalue and not TPerl_AB_CanAccess(sid))) then
 				sid = self.spellID or eventSpellID
@@ -633,6 +645,11 @@ function TPerl_ArcaneBar_OnEvent(self, event, unit, ...)
 		end
 		self.spellID = sid
 		self.estimated = nil
+
+		if(type(notInterruptible) == "boolean") then
+			-- Allowed to be called using the secret value
+			self.shield:SetAlphaFromBoolean(notInterruptible)
+		end
 
 		self:SetStatusBarColor(barColours.channel.r, barColours.channel.g, barColours.channel.b, conf.transparency.frame)
 		self.barSpark:Show()
